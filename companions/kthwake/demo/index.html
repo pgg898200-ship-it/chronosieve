@@ -4,61 +4,74 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Explore exact k-of-window threshold transitions and idle expiration for one guard on an ordered event stream in KthWake.">
-<title>KthWake · Window explorer</title>
+<meta name="description" content="Explore how a C++17 scheduler turns timestamped events into sliding-window threshold callbacks and wakes on idle expiry.">
+<title>KthWake · Sliding-window threshold scheduler</title>
 <style>
 :root{color-scheme:dark;--bg:#101513;--surface:#171d1a;--line:#384039;--soft:#a8b2a9;--ink:#eef4ec;--lime:#b8ef81;--gold:#f0bd6e;--mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;--sans:Inter,'Helvetica Neue',Arial,sans-serif}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans)}main,header,footer{width:min(1120px,calc(100% - 56px));margin:auto}header{height:75px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:10px;font-size:19px;font-weight:700;letter-spacing:-.035em}.brand svg{width:28px;color:var(--lime)}.meta,.label,.clock,.tag,button,.code,output,.axis,.status,.counter,.legend{font-family:var(--mono)}.meta,.label{color:var(--soft);font-size:12px}.hero{padding:44px 0 30px}.hero h1{font-size:clamp(35px,6vw,68px);font-weight:570;letter-spacing:-.064em;line-height:1.02;margin:0 0 12px}.hero p{color:#c1cac2;margin:0;max-width:690px;font-size:17px}.grid{display:grid;grid-template-columns:minmax(0,1fr) 283px;gap:15px;align-items:start}.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}.top,.aside,.trace-head{padding:18px 20px}.top,.trace-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.top{border-bottom:1px solid var(--line)}h2{font-size:17px;line-height:1.25;letter-spacing:-.025em;margin:0}.clock{font-size:13px;color:#c3ccc3}.plot{padding:16px 12px 0}.plot svg{width:100%;height:auto;min-height:158px;display:block}.legend{padding:0 20px 15px;color:var(--soft);font-size:11px;display:flex;gap:18px;flex-wrap:wrap}.legend span{display:flex;align-items:center;gap:6px}.mark{width:7px;height:7px;background:var(--gold);border-radius:50%}.bar{height:3px;width:14px;background:var(--lime)}.needle{height:10px;width:0;border-left:1px dashed #dee6db}.playbar{padding:14px 20px 18px;border-top:1px solid var(--line)}.range-head{display:flex;align-items:center;justify-content:space-between}.range-head output{font-size:13px;color:var(--lime)}input[type=range]{width:100%;accent-color:var(--lime);margin:9px 0 14px;cursor:pointer}.buttons{display:flex;flex-wrap:wrap;gap:7px}button,input,textarea{font:inherit}.buttons button,.aside button{font:12px/1.2 var(--mono);border:1px solid #536156;color:var(--ink);background:#252e27;border-radius:5px;min-height:36px;padding:8px 11px;cursor:pointer}button:hover:enabled{border-color:var(--lime);color:var(--lime)}button:disabled{opacity:.42;cursor:not-allowed}.buttons .primary{background:var(--lime);color:#15230e;border-color:var(--lime);font-weight:700}.buttons .primary:hover:enabled{background:#cef8a7;color:#15230e}button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--lime);outline-offset:3px}.aside h2{margin-bottom:18px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:13px}.field label{font-size:13px;color:#cbd4cb}input[type=number],textarea{background:#101713;border:1px solid #49554a;border-radius:5px;padding:8px 10px;color:var(--ink);font:13px/1.5 var(--mono);width:100%}textarea{resize:vertical;min-height:59px}.errors{color:#ffb597;font-size:12px;margin:6px 0}.hint{color:var(--soft);font-size:12px;line-height:1.5;margin:0}.aside .buttons{margin:3px 0 12px}.aside .quiet{background:transparent}.summary{display:flex;border-top:1px solid var(--line);background:#19211c}.stat{flex:1;padding:13px 16px}.stat+.stat{border-left:1px solid var(--line)}.stat dt{font-size:11px;color:var(--soft)}.stat dd{font:18px/1.6 var(--mono);margin:0}.stat .on{color:var(--lime)}dl{margin:0}.trace{margin-top:15px}.trace-head{border-bottom:1px solid var(--line)}.counter{font-size:12px;color:var(--soft)}table{border-collapse:collapse;width:100%;font-size:13px;text-align:left}th{font-size:11px;color:var(--soft);font-weight:450}th,td{padding:8px 20px}tr+tr{border-top:1px solid #2f3831}td{font-family:var(--mono)}.state-up{color:var(--lime)}.state-down{color:var(--gold)}.trace-empty{color:var(--soft);padding:14px 20px;margin:0;font-size:14px}details{padding:12px 20px;border-top:1px solid var(--line);font-size:13px;color:var(--soft)}details summary{cursor:pointer;color:var(--ink)}details p{margin:9px 0}.code{display:block;white-space:pre-wrap;color:var(--lime);margin:9px 0 0;font-size:12px;overflow-wrap:anywhere}footer{border-top:1px solid var(--line);padding:18px 0 26px;margin-top:28px;color:var(--soft);font-size:12px}.a11y{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%)}@media(max-width:820px){.grid{grid-template-columns:1fr}.aside{padding:16px 20px}.fields{max-width:320px}.hero{padding-top:30px}.field textarea{min-height:38px}}@media(max-width:550px){main,header,footer{width:calc(100% - 24px)}header{height:54px}.meta{font-size:10px}.hero p{font-size:15px}.top,.trace-head,.aside,.playbar{padding-left:13px;padding-right:13px}.stat{padding:11px 9px}.stat dt{font-size:10px}.stat dd{font-size:16px}td,th{padding:8px 9px}.plot{padding-left:2px;padding-right:2px}.legend{font-size:10px;padding-left:13px;gap:12px}.buttons button{min-height:42px}.plot svg{min-height:145px}}
 
 a{color:var(--lime);text-underline-offset:3px}a:hover{text-decoration-thickness:2px}a:focus-visible{outline:2px solid var(--lime);outline-offset:4px}.topnav{display:flex;gap:14px;align-items:center}.topnav a{font-size:13px;text-decoration:none;font-weight:600}.topnav a:hover{text-decoration:underline}.release{margin-top:25px;padding:22px 20px;background:#171e19}.release h2{font-size:24px}.release p{color:var(--soft);margin:6px 0 13px;font-size:14px;max-width:680px}.release-links{display:flex;flex-wrap:wrap;align-items:center;gap:9px 19px}.release-links a{font-size:13px}.release-links .download{border:1px solid #799269;padding:8px 12px;border-radius:5px;text-decoration:none}.release-links .download:hover{background:#243020}.snippet{background:#101713;padding:12px 15px;border-radius:6px;overflow:auto;margin:12px 0;font:13px/1.5 var(--mono);color:var(--ink)}.release h3{font-size:15px;font-weight:600;margin:19px 0 0}.release .note{font-size:12px;margin:6px 0 0}@media(max-width:550px){.topnav .meta{display:none}.release{padding:16px 13px}}
+.hero{color:#19231b;background:#e7eddd;margin:22px 0 16px;padding:clamp(21px,3.7vw,48px);display:grid;grid-template-columns:1.12fr .88fr;column-gap:clamp(16px,4vw,55px);align-items:end;border-radius:2px}
+.hero .category{color:#405942;font:650 13px/1.4 var(--mono);margin:0 0 13px}
+.hero h1{margin:0;font-size:clamp(40px,6.5vw,78px);font-weight:600;line-height:.98;letter-spacing:-.065em}
+.hero .intro{color:#2e4132;font-size:clamp(15px,1.7vw,19px);line-height:1.44;max-width:36ch}
+.top{align-items:baseline}.panel{border-radius:4px}.plot{background-color:#131a15;background-image:linear-gradient(#c0f0a007 1px,transparent 1px),linear-gradient(90deg,#c0f0a007 1px,transparent 1px);background-size:16px 16px}
+.readout{color:#d7e3d3;font-size:14px;margin:0;padding:10px 20px;border-left:3px solid var(--lime);background:#202a22}
+@media(max-width:700px){.hero{grid-template-columns:1fr;gap:14px;margin-top:12px}.hero .intro{max-width:50ch}.hero h1{max-width:15ch}}
+@media(max-width:550px){.readout{padding-left:12px}.topnav{gap:9px}}
 </style>
 </head>
 <body>
-<header><div class="brand"><svg viewBox="0 0 30 24" fill="none" aria-hidden="true"><path d="M0 17h7V6h10v11h5V6h8" stroke="currentColor" stroke-width="3"/></svg>KthWake</div><nav class="topnav" aria-label="Project"><span class="meta">C++17 / window index</span><a href="#release">Get KthWake ↓</a></nav></header>
+<header><div class="brand"><svg viewBox="0 0 30 24" fill="none" aria-hidden="true"><path d="M0 17h7V6h10v11h5V6h8" stroke="currentColor" stroke-width="3"/></svg>KthWake</div><nav class="topnav" aria-label="Project"><a href="https://github.com/pgg898200-ship-it/chronosieve/tree/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake">Source</a><a href="#release">Use in your scheduler ↓</a></nav></header>
 <main>
-<section class="hero"><h1>Run 4,096 rolling thresholds on one timer.</h1><p>Give KthWake a timestamp and an arrival count. It tells your scheduler which rules changed and when to wake if traffic stops. Replay a single rule below, or download the header and benchmark all 4,096 on recorded traffic.</p></section>
+<section class="hero">
+  <div><p class="category">Sliding-window threshold scheduler</p><h1>Wake on the third result.</h1></div>
+  <p class="intro">Give KthWake an ordered stream of tool completions. It tells your event loop when a rule turns on and when it will turn off if no more results arrive.</p>
+</section>
 <div class="grid">
 <div class="panel">
-<div class="top"><h2>Window explorer</h2><span class="clock">guard = 0</span></div>
+<div class="top"><h2>Tool completion timeline</h2><span class="clock">Rule #0</span></div>
 <div class="plot"><svg id="chart" viewBox="0 0 680 172" role="img" aria-labelledby="svg-title svg-description"><title id="svg-title">Arrivals and callback state over time</title><desc id="svg-description"></desc><g id="plot"></g></svg></div>
 <div class="legend"><span><i class="mark"></i>Arrival</span><span><i class="bar"></i>Threshold met</span><span><i class="needle"></i>Clock</span></div>
+<p id="readout" class="readout"></p>
 <div class="playbar">
-<div class="range-head"><label class="label" for="clock">Replay clock</label><output id="clock-out" for="clock"></output></div>
-<input id="clock" type="range" min="0" step="1" value="7" max="28">
-<div class="buttons"><button class="primary" type="button" id="next">Next callback →</button><button type="button" id="tick">+1 tick</button><button type="button" id="push">Add arrival now</button></div>
+<div class="range-head"><label class="label" for="clock">Replay time</label><output id="clock-out" for="clock"></output></div>
+<input id="clock" type="range" min="0" step="1" value="5" max="26">
+<div class="buttons"><button class="primary" type="button" id="next">Next callback →</button><button type="button" id="tick">+1 ms</button><button type="button" id="push">Add arrival now</button></div>
 </div>
-<dl class="summary"><div class="stat"><dt>Window count</dt><dd id="count"></dd></div><div class="stat"><dt>Threshold met</dt><dd id="state"></dd></div><div class="stat"><dt>Idle expiry</dt><dd id="expiry"></dd></div></dl>
+<dl class="summary"><div class="stat"><dt>Window count</dt><dd id="count"></dd></div><div class="stat"><dt>Threshold met</dt><dd id="state"></dd></div><div class="stat"><dt>Clears if idle</dt><dd id="expiry"></dd></div></dl>
 </div>
 <form id="configure" class="panel aside">
-<h2>Workload</h2>
-<div class="fields"><div class="field"><label for="k">Threshold k</label><input id="k" type="number" min="1" max="256" step="1" value="3" required></div>
-<div class="field"><label for="w">Window W (ticks)</label><input id="w" type="number" min="1" max="100000" step="1" value="8" required></div></div>
-<div class="field"><label for="arrivals">Arrival ticks</label><textarea id="arrivals" rows="2" spellcheck="false">1, 3, 4, 5, 13, 15, 16, 16, 20</textarea></div>
+<h2>Edit the rule</h2>
+<div class="fields"><div class="field"><label for="k">Results required</label><input id="k" type="number" min="1" max="256" step="1" value="3" required></div>
+<div class="field"><label for="w">Window (ms)</label><input id="w" type="number" min="1" max="100000" step="1" value="20" required></div></div>
+<div class="field"><label for="arrivals">Completion times (ms)</label><textarea id="arrivals" rows="2" spellcheck="false">0, 0, 5</textarea></div>
 <p class="errors" id="error" role="alert" hidden></p>
 <div class="buttons"><button type="submit">Apply trace</button><button type="button" class="quiet" id="reset">Reset example</button></div>
-<p class="hint">Use comma-separated ticks. Repeated ticks add multiple arrivals in one step.</p>
+<p class="hint">Separate times with commas. Repeat a time for results that finish together.</p>
 </form>
 </div>
 <section class="panel trace"><div class="trace-head"><h2>Callback log</h2><span id="total" class="counter"></span></div>
-<table id="log"><thead><tr><th scope="col">Tick</th><th scope="col">State</th><th scope="col">Trigger</th></tr></thead><tbody></tbody></table><p class="trace-empty" id="empty" hidden>No callbacks through this tick.</p>
+<table id="log"><thead><tr><th scope="col">Time (ms)</th><th scope="col">State</th><th scope="col">Trigger</th></tr></thead><tbody></tbody></table><p class="trace-empty" id="empty" hidden>No callbacks through this tick.</p>
+<details><summary>Read callback log as JSONL</summary><pre class="snippet"><code id="jsonl"></code></pre></details>
 <details><summary>Drive the C++ index</summary><p>Pass each timestamp’s arrivals together. Use the next expiry to drive the clock during idle periods. At a shared timestamp, a single step applies expirations and arrivals before reporting changes.</p><code class="code">index.step(t, arrivals, callback);<br>auto deadline = index.next_expiry();</code></details>
 </section>
 <section class="panel release" id="release" aria-labelledby="release-title">
-<h2 id="release-title">Run the native index</h2>
-<p>Include the single header in a C++17 service, or build the command-line replay tool from the complete source release.</p>
-<div class="release-links"><a class="download" href="kthwake-0.1.0.tar.gz" download>Download source v0.1.0 ↓</a><a href="kthwake.hpp" download>Download kthwake.hpp</a><a href="kthwake-linux-x86_64" download>Linux x86-64 CLI</a></div>
-<h3>37.1 ms for 330,890 transitions</h3><p>On a held-out Azure trace with 4,096 modeled individual-rate policies, the fastest tested alternative took 75.0 ms. A dedicated heap won the other two Azure timer workloads. <a href="EVIDENCE.md">Inspect all results</a>.</p>
+<h2 id="release-title">Use KthWake in your event loop</h2>
+<p>Put one index after an ordered event stream. Pass the arrival count to <code>step</code>, dispatch the changed rule IDs, and arm one timer for the next idle deadline.</p>
+<div class="release-links"><a class="download" href="https://pgg-kthwake.tancurl3.chatgpt.site/kthwake-0.1.0.tar.gz" download>Download source v0.1.0 ↓</a><a href="https://pgg-kthwake.tancurl3.chatgpt.site/kthwake.hpp" download>Download kthwake.hpp</a><a href="https://pgg-kthwake.tancurl3.chatgpt.site/kthwake-linux-x86_64" download>Linux x86-64 CLI</a></div>
+<h3>37.1 ms for 330,890 transitions</h3><p>On a held-out Azure trace with 4,096 modeled individual-rate policies, the fastest tested alternative took 75.0 ms. A dedicated heap won the other two Azure timer workloads. <a href="https://github.com/pgg898200-ship-it/chronosieve/blob/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake/EVIDENCE.md">Inspect all results</a>.</p>
 <h3>Run the example</h3><p>In the extracted source directory, run the bundled trace through the native CLI.</p>
 <pre class="snippet"><code>make example</code></pre>
-<div class="release-links"><a href="EVIDENCE.md">Benchmark results and limits ↗</a><a href="guide.md">Markdown integration guide ↗</a><a href="SHA256SUMS">SHA-256 checksums</a><a href="REPRODUCE.md">Share an independent result</a></div>
+<div class="release-links"><a href="https://github.com/pgg898200-ship-it/chronosieve/blob/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake/EVIDENCE.md">Benchmark results and limits ↗</a><a href="https://github.com/pgg898200-ship-it/chronosieve/tree/releases/kthwake-0.1.0/companions/kthwake#use-from-python">Python and C++ integration ↗</a><a href="https://pgg-kthwake.tancurl3.chatgpt.site/SHA256SUMS">SHA-256 checksums</a><a href="https://github.com/pgg898200-ship-it/chronosieve/blob/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake/REPRODUCE.md">Share an independent result</a></div>
 </section>
 <div class="a11y" id="announcement" role="status" aria-live="polite"></div>
 </main>
-<footer>Interactive JavaScript illustration of the C++ index’s semantics. Timestamps use integer ticks. At tick t, the window includes arrivals after t − W through t. Runtime measurements belong to the native benchmark.</footer>
+<footer>Interactive JavaScript illustration of the C++ index’s semantics. The explorer uses milliseconds. The native index accepts any consistent integer time unit. At tick t, the window includes arrivals after t − W through t. Runtime measurements belong to the native benchmark.</footer>
 <script>
 'use strict';
 const byId = id => document.getElementById(id);
-const initial = {k:3, w:8, times:[1,3,4,5,13,15,16,16,20], now:7};
+const initial = {k:3, w:20, times:[0,0,5], now:5};
 let config = {...initial, times:[...initial.times]};
 let transitions = [];
 let horizon = 0;
@@ -107,7 +120,7 @@ function draw() {
     label(x(tick),161,tick,i===0?'start':i===4?'end':'middle');
   }
   svg('rect',{x:x(Math.max(0,config.now-config.w)),y:9,width:Math.max(0,x(config.now)-x(Math.max(0,config.now-config.w))),height:128,fill:ink,opacity:.055});
-  label(left,20,'ARRIVALS');label(left,88,'STATE');
+  label(left,20,'COMPLETIONS');label(left,88,'STATE');
   svg('line',{x1:left,x2:right,y1:52,y2:52,stroke:line});
   const groups=new Map();
   for(const t of config.times) groups.set(t,(groups.get(t)||0)+1);
@@ -137,13 +150,18 @@ function render() {
   const deadline=on?windowTimes[windowTimes.length-k]+w:null;
   const history=transitions.filter(c=>c.t<=now);
   byId('clock').value=now;
-  byId('clock-out').textContent='t = '+now;
+  byId('clock-out').textContent=now+' ms';
   byId('count').textContent=windowTimes.length;
   byId('state').textContent=on?'true':'false';
   byId('state').classList.toggle('on',on);
-  byId('expiry').textContent=deadline===null?'—':'t = '+deadline;
+  byId('expiry').textContent=deadline===null?'—':deadline+' ms';
+  const rule = k+' or more results in '+w+' ms';
+  byId('readout').textContent=on
+    ? 'Rule met · '+rule+'. With no more completions, the callback clears at '+deadline+' ms.'
+    : 'Waiting for '+rule+'. '+windowTimes.length+' in the window now.';
+  byId('jsonl').textContent=history.map(c=>JSON.stringify({t:c.t,id:0,active:c.on})).join('\n');
   byId('expiry').title='Tick when the threshold clears if no more arrivals occur';
-  byId('total').textContent=history.length+' through t = '+now;
+  byId('total').textContent=history.length+' through '+now+' ms';
   byId('next').disabled=!transitions.some(c=>c.t>now);
   byId('tick').disabled=now>=horizon;
   byId('push').disabled=now>MAX_TICK||times.length>=MAX_EVENTS;
@@ -156,7 +174,7 @@ function render() {
     const state=tr.insertCell();state.textContent=c.on?'true':'false';state.className=c.on?'state-up':'state-down';
     tr.insertCell().textContent=c.in&&c.out?'Arrival + expiry':c.in?'Arrival':'Idle expiry';
   }
-  const desc=`At tick ${now}, ${windowTimes.length} arrivals are in the window. The threshold is ${on?'met':'unmet'}. ${history.length} callbacks so far.`;
+  const desc=`At ${now} ms, ${windowTimes.length} arrivals are in the window. The threshold is ${on?'met':'unmet'}. ${history.length} callbacks so far.`;
   byId('svg-description').textContent=desc+' Dotted state segments preview the scheduled input.';
   byId('announcement').textContent=desc;draw();
 }
@@ -168,7 +186,7 @@ byId('configure').addEventListener('submit',e=>{
   const raw=byId('arrivals').value.trim();
   const items=raw===''?[]:raw.split(/[\s,]+/);
   if(items.length>MAX_EVENTS || items.some(t=>!/^\d+$/.test(t)||!Number.isSafeInteger(Number(t))||Number(t)>MAX_TICK)){
-    showError('Use up to 256 nonnegative whole-number arrival ticks from 0 to 100000.');return;
+    showError('Enter up to 256 whole-number completion times from 0 to 100000 ms.');return;
   }
   showError();
   config={k:Number(byId('k').value), w:Number(byId('w').value),times:items.map(Number).sort((a,b)=>a-b),now:0};

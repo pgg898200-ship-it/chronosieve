@@ -1,8 +1,8 @@
 ---
-title: KthWake
+title: KthWake · Sliding-window threshold scheduler
 emoji: ⏱️
-colorFrom: green
-colorTo: gray
+colorFrom: yellow
+colorTo: green
 license: apache-2.0
 tags:
   - cpp
@@ -11,21 +11,21 @@ tags:
   - multi-agent
 sdk: static
 app_file: index.html
-short_description: Explore exact k-of-window transitions and idle deadlines
+short_description: Turn rolling event counts into callbacks and idle deadlines
 ---
 
-# KthWake
+# KthWake · Sliding-window threshold scheduler
 
-Give an agent scheduler one ordered stream of timestamped arrivals. KthWake identifies the rules that just became true or false and returns an exact idle deadline. The native library is one C++17 header. The interactive Space illustrates its semantics in JavaScript.
+Wake a waiting task when three results arrive in 20 ms. KthWake sits between an ordered stream of events and your scheduler. It receives timestamped arrival counts and emits the IDs and new states of rolling rules that changed. One host timer handles the next expiry even after traffic stops.
 
-A rule can mean “three tool results in 20 milliseconds” or “at least 1,000 tokens charged in the last second.” Subscribers retain individual IDs even when their rules match. One host timer can deliver all idle expirations on the stream. The source includes a JSONL CLI, a CPython binding, an asyncio example, and the production-trace benchmarks.
+The browser timeline opens with two completions at 0 ms and one at 5 ms. Rule 0 turns on at 5 ms. Choose **Next callback** to see it turn off at 20 ms. Edit the times and rule to replay your own sample. The interactive timeline runs in JavaScript. The production index is a C++17 header with a CPython binding and JSONL CLI.
 
 ## Install the Python binding
 
 With a C++17 compiler, CPython, wheel and setuptools:
 
 ```sh
-python -m pip install --no-build-isolation https://huggingface.co/spaces/pgg-engineering/kthwake/resolve/main/kthwake-0.1.0.tar.gz
+python -m pip install --no-build-isolation 'git+https://github.com/pgg898200-ship-it/chronosieve.git@7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f#subdirectory=companions/kthwake'
 ```
 
 ```python
@@ -41,4 +41,4 @@ assert ix.step(120) == [(0, False)]
 
 The runnable release includes recorded arrivals from Mooncake and an Azure code-serving holdout, with three modeled policy registries per trace. It also includes million-subscriber synthetic cases, a timestamp-aware correctness oracle and competing native implementations. Evaluations distinguish observation-time snapshots from every timer-driven crossing. On the Azure individual-rate workload, KthWake delivered 330,890 timestamped transitions in 37.1 ms. The fastest of three native heap alternatives took 75.0 ms. The heap won the other two Azure timer workloads.
 
-[Performance evidence](https://huggingface.co/spaces/pgg-engineering/kthwake/blob/main/EVIDENCE.md) · [Source files](https://huggingface.co/spaces/pgg-engineering/kthwake/tree/main) · [Independent benchmark instructions](https://huggingface.co/spaces/pgg-engineering/kthwake/blob/main/REPRODUCE.md) · [Community](https://huggingface.co/spaces/pgg-engineering/kthwake/discussions)
+[Performance evidence](https://github.com/pgg898200-ship-it/chronosieve/blob/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake/EVIDENCE.md) · [Source files](https://github.com/pgg898200-ship-it/chronosieve/tree/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake) · [Independent benchmark instructions](https://github.com/pgg898200-ship-it/chronosieve/blob/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake/REPRODUCE.md) · [Community](https://huggingface.co/spaces/pgg-engineering/kthwake/discussions)

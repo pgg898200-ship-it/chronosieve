@@ -1,18 +1,26 @@
-# KthWake
+# KthWake · Sliding-window threshold scheduler
 
-Wake the agents whose count thresholds just changed. KthWake takes one timestamp and the number of arrivals at that instant. It reports the rules that turned on or off and can tell an event loop exactly when it needs to wake up again in silence.
+Wake a waiting task when three tool results arrive within 20 ms. If results stop, clear the signal at the exact expiry time. KthWake turns these rolling-count rules into callbacks for an event loop.
 
-A dispatcher could batch completed tool calls, release a waiting task after three completions in 20 ms, and lower a capacity signal when a burst ends. Give each independent ordered stream its own index. One stream can have many subscribers, each with a different threshold or window.
+Place one index between each ordered stream of arrivals and your dispatcher. Pass in a timestamp and a count. Read out the IDs of rules that changed, their new states, and the next idle deadline. A single host timer can serve all rules on that stream.
 
-[Try the timeline](https://pgg-kthwake.tancurl3.chatgpt.site) · [Performance evidence](EVIDENCE.md) · [Replay the trace](replay/README.md)
+[Try the interactive timeline](https://pgg-kthwake.tancurl3.chatgpt.site) · [Single C++17 header](include/kthwake.hpp) · [Python binding](#use-from-python) · [Benchmark results](EVIDENCE.md)
+
+| Example time | Input to the index | Output for the three-in-20-ms rule |
+| --- | --- | --- |
+| 100 ms | Two results finish | Waiting |
+| 105 ms | One more result finishes | Rule 0 turns on. The idle deadline is 120 ms. |
+| 120 ms | Timer fires with zero arrivals | Rule 0 turns off. |
 
 On a held-out Azure code-serving trace with 4,096 modeled individual-rate subscriptions, KthWake emitted 330,890 timestamped transitions in **37.1 ms**, against **75.0 ms** for the fastest of three native heap alternatives. A dedicated rank heap won the shared-rate and burst registries on the same trace.
 
 ## Run in a minute
 
-With a C++17 compiler and Make:
+With Make and a C++17 compiler, clone the release branch and run the bundled trace.
 
 ```sh
+git clone --depth 1 --branch releases/kthwake-0.1.0 https://github.com/pgg898200-ship-it/chronosieve.git
+cd chronosieve/companions/kthwake
 make example
 ```
 
@@ -69,7 +77,7 @@ assert ix.next_expiry() == 110
 
 The asyncio example arms one timer per stream, reuses it while its deadline holds, and handles event-loop delays by emitting intervening transitions at their logical times. The Python binding materializes tuples for the changed subscribers. The native benchmark measures C++ callbacks.
 
-The command-line release for Linux x86-64 is also available from the demo downloads. It requires glibc ≥2.34 and libstdc++ with GLIBCXX_3.4.32. The source build uses the host toolchain.
+The [prebuilt Linux x86-64 CLI](https://pgg-kthwake.tancurl3.chatgpt.site/kthwake-linux-x86_64) has [published SHA-256 checksums](https://pgg-kthwake.tancurl3.chatgpt.site/SHA256SUMS). It requires glibc ≥2.34 and libstdc++ with GLIBCXX_3.4.32. The source build uses the host toolchain.
 
 ## Time and delivery contract
 
