@@ -1,27 +1,23 @@
 ---
 name: chronosieve
-description: Zero-dependency C11/SIMD streaming change detection (ARL-guaranteed E-Detectors & Cross-Agent E-Fusion), Pre-Control E-Reset Conformal PID + COMA intervals, Sleeping Fixed-Share BOA multi-agent fusion with rogue agent isolation, and 91.6%–96.3% (BPE-proxy) token-reducing Swing PLA Markdown digests + lossless zoom() via Python, CLI, or MCP.
+description: Monitor numeric telemetry, detect changes, combine intermittent forecasts and emit a Markdown digest when a wake condition fires. Retrieve retained samples by channel and timestamp.
 ---
 
-# ChronoSieve Agent Skill
+# ChronoSieve
 
-Use `chronosieve` whenever you process streaming time series, telemetry, sensor feeds, financial ticks, or multi-agent forecasts and need:
-1. **Distribution-free changepoint detection** with certified false-alarm control ($\text{ARL} \ge \gamma$), even on heavy-tailed/Cauchy/discrete/correlated streams (verified on the 1898 Nile Aswan dam changepoint with 0 pre-1899 false alarms).
-2. **Non-stationary conformal prediction intervals** that recover immediately after volatility shocks without sacrificing asymptotic $1-\alpha$ coverage.
-3. **Asynchronous multi-agent forecast fusion** (fast System-1 + slow System-2 LLMs) that automatically detects and quarantines hallucinating agents.
-4. **Massive LLM token reduction** (91.6% BPE-proxy / 88.3% `chars/4` full-series on Mauna Loa CO2 without wake gating; 96.3% BPE-proxy / 95.0% `chars/4` with wake gating on 10k telemetry) by emitting compact ~195–200-token (`chars/4`) Markdown digests and drilling down losslessly via `zoom(channel, t0, t1)`.
+Use this library when a caller receives timestamped observations and needs a local decision before notifying an operator or calling a model. Read original samples from the channel's ring buffer to inspect a flag.
 
-## Quick Setup
+[Run a latency-spike replay](https://github.com/pgg898200-ship-it/chronosieve#replay-one-latency-spike) · [Python method signatures](python/chronosieve/_core.pyi)
+
+## Install
+
+Build the Python extension with Git, CPython 3.10+ development headers and a C11 compiler. On Linux or macOS use the system C compiler.
 
 ```bash
-python3 -m pip install --no-build-isolation -e .
-make cli   # optional 101 KB native C11 CLI
+CC=cc python3 -m pip install "git+https://github.com/pgg898200-ship-it/chronosieve.git@743092a8c0da995a2e5007d7fea56ae16e669fe2"
 ```
 
-MCP server command (zero dependencies):
-```bash
-python3 -m chronosieve.mcp_server
-```
+For local stdio MCP, run `python3 -m chronosieve.mcp_server` in that environment. For the standalone C11 CLI, run `make cli` from a source checkout.
 
 ## Decision Rules
 
