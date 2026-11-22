@@ -16,7 +16,9 @@ On a held-out Azure code-serving trace with 4,096 modeled individual-rate subscr
 
 ## Run in a minute
 
-With Make and a C++17 compiler, clone the release branch and run the bundled trace.
+**Try the rule offline.** Open [demo/index.html](demo/index.html) on GitHub, choose **Download raw file**, and open the saved HTML in your browser. The rule is active at 5 ms. Choose **Next callback** to see it clear at 20 ms. You can edit the arrival times and replay the trace.
+
+**Run the native example.** With Make and a C++17 compiler, clone the release branch and run the bundled trace.
 
 ```sh
 git clone --depth 1 --branch releases/kthwake-0.1.0 https://github.com/pgg898200-ship-it/chronosieve.git
