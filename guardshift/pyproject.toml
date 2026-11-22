@@ -11,3 +11,4 @@ license = "MIT"
 
 [project.scripts]
 guardshift = "guardshift.__main__:main"
+

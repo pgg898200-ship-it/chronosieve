@@ -12,7 +12,7 @@ using Owned = std::unique_ptr<PyObject, DecRef>;
 Owned as_tuple(PyObject* object, Py_ssize_t size = -1) {
     Owned seq(PySequence_Tuple(object));
     if (!seq) throw PythonError{};
-    if (size >= 0 && PyTuple_GET_SIZE(seq.get()) != size) {
+    if (size >= 0 && PyTuple_Size(seq.get()) != size) {
         PyErr_SetString(PyExc_ValueError, "wrong number of fields in record");
         throw PythonError{};
     }
@@ -59,16 +59,16 @@ PyObject* build(PyObject*, PyObject* args) {
     return translate([&]() -> PyObject* {
         auto inputs = as_tuple(initial);
         std::vector<Value> values;
-        for (Py_ssize_t i=0; i<PyTuple_GET_SIZE(inputs.get()); ++i)
-            values.push_back(value(PyTuple_GET_ITEM(inputs.get(), i)));
+        for (Py_ssize_t i=0; i<PyTuple_Size(inputs.get()); ++i)
+            values.push_back(value(PyTuple_GetItem(inputs.get(), i)));
         auto rows = as_tuple(guards);
-        std::vector<std::vector<Term>> definitions(PyTuple_GET_SIZE(rows.get()));
-        for (Py_ssize_t i=0; i<PyTuple_GET_SIZE(rows.get()); ++i) {
-            auto row = as_tuple(PyTuple_GET_ITEM(rows.get(), i));
-            for (Py_ssize_t j=0; j<PyTuple_GET_SIZE(row.get()); ++j) {
-                auto term = as_tuple(PyTuple_GET_ITEM(row.get(), j), 3);
-                definitions[i].push_back({id(PyTuple_GET_ITEM(term.get(), 0)),
-                    value(PyTuple_GET_ITEM(term.get(), 1)), value(PyTuple_GET_ITEM(term.get(), 2))});
+        std::vector<std::vector<Term>> definitions(PyTuple_Size(rows.get()));
+        for (Py_ssize_t i=0; i<PyTuple_Size(rows.get()); ++i) {
+            auto row = as_tuple(PyTuple_GetItem(rows.get(), i));
+            for (Py_ssize_t j=0; j<PyTuple_Size(row.get()); ++j) {
+                auto term = as_tuple(PyTuple_GetItem(row.get(), j), 3);
+                definitions[i].push_back({id(PyTuple_GetItem(term.get(), 0)),
+                    value(PyTuple_GetItem(term.get(), 1)), value(PyTuple_GetItem(term.get(), 2))});
             }
         }
         auto index = std::make_unique<Index>(values, definitions);
@@ -85,10 +85,10 @@ PyObject* apply(PyObject*, PyObject* args) {
         auto* index = unpack(capsule);
         auto rows = as_tuple(updates);
         std::vector<Update> patch;
-        patch.reserve(PyTuple_GET_SIZE(rows.get()));
-        for (Py_ssize_t i=0; i<PyTuple_GET_SIZE(rows.get()); ++i) {
-            auto row = as_tuple(PyTuple_GET_ITEM(rows.get(), i), 2);
-            patch.push_back({id(PyTuple_GET_ITEM(row.get(), 0)), value(PyTuple_GET_ITEM(row.get(), 1))});
+        patch.reserve(PyTuple_Size(rows.get()));
+        for (Py_ssize_t i=0; i<PyTuple_Size(rows.get()); ++i) {
+            auto row = as_tuple(PyTuple_GetItem(rows.get(), i), 2);
+            patch.push_back({id(PyTuple_GetItem(row.get(), 0)), value(PyTuple_GetItem(row.get(), 1))});
         }
         auto changes = index->apply(patch);
         Owned result(PyList_New(static_cast<Py_ssize_t>(changes.size())));
@@ -97,7 +97,7 @@ PyObject* apply(PyObject*, PyObject* args) {
             auto& change = changes[i];
             auto* item = Py_BuildValue("(IO)", static_cast<unsigned>(change.guard), change.active ? Py_True : Py_False);
             if (!item) return nullptr;
-            PyList_SET_ITEM(result.get(), static_cast<Py_ssize_t>(i), item);
+            if (PyList_SetItem(result.get(), static_cast<Py_ssize_t>(i), item) < 0) return nullptr;
         }
         return result.release();
     });
