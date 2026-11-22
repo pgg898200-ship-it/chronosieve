@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guardshift"
+version = "0.1.0"
+description = "Wake agents on exact integer range guard transitions"
+requires-python = ">=3.9"
+license = "MIT"
+
+[project.scripts]
+guardshift = "guardshift.__main__:main"

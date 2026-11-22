@@ -1,0 +1,13 @@
+# Signals (in order): queue depth, free workers, p95 latency in milliseconds.
+init 0 8 90
+# Queue pressure with limited capacity. Closed intervals; implicit guard ID 0.
+guard 0 30 1000000 1 0 4
+# Latency above target. Guard ID 1.
+guard 2 151 10000
+# One transaction per line. The fifth patch repeats field 2; last write wins.
+patch 0 35 1 4
+patch 2 151
+patch 1 6 0 29
+patch 0 45 1 2
+patch 2 180 2 140
+patch 0 0 1 8 2 90

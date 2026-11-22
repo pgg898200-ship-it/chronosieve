@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Try Guardshift's atomic guard semantics. Edit a signal patch and see exactly which guards change truth.">
+<title>Guardshift · Live guard explorer</title>
+<style>
+:root{color-scheme:light;--ink:#152d27;--sub:#53655e;--line:#ccd5c9;--surface:#fffef9;--bg:#f0f2e9;--green:#176844;--green-light:#deefde;--terra:#8d4423;--terra-light:#f9e8dc;--mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'Inter',system-ui,-apple-system,sans-serif}
+main{width:min(1100px,calc(100% - 48px));margin:auto;padding:30px 0 52px}
+header{display:flex;align-items:center;gap:11px;padding:0 0 16px;border-bottom:1px solid var(--line);font-weight:750;font-size:1.05rem}
+.mark{display:grid;place-items:center;background:var(--ink);color:#d3e8ad;width:29px;height:29px;border-radius:7px;font:700 19px/1 var(--mono)}
+h1{font-size:clamp(2.25rem,5.3vw,4rem);letter-spacing:-.06em;line-height:1.06;margin:32px 0 12px;font-weight:650}
+.lead{max-width:700px;color:var(--sub);margin:0 0 28px;font-size:1.07rem}
+h2,h3{letter-spacing:-.035em;line-height:1.2;margin:0}h2{font-size:1.4rem}h3{font-size:1.1rem}
+p{margin:.5rem 0 0}.deck{display:grid;grid-template-columns:1.05fr 1fr;gap:16px}
+.panel{min-width:0;background:var(--surface);padding:22px 24px 24px;border:1px solid var(--line);border-radius:14px}
+.bar{display:flex;justify-content:space-between;gap:14px;align-items:baseline}.small,small{font-size:.85rem;color:var(--sub)}
+button,select,textarea{font:inherit}button,select{cursor:pointer}
+button:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #207aaf;outline-offset:3px}
+select{width:100%;margin-top:6px;background:white;color:var(--ink);padding:8px;border:1px solid #829185;border-radius:5px}
+label{display:block;font-weight:600;font-size:.88rem;margin-top:16px}
+textarea{width:100%;resize:vertical;display:block;background:#f5f7ef;color:var(--ink);border:1px solid #91a18e;border-radius:6px;padding:8px 10px;font: .93rem/1.5 var(--mono);min-height:72px}
+.patch-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}
+button{border:0;border-radius:6px;padding:9px 16px;font-weight:650}button.primary{background:var(--ink);color:white}button.primary:hover{background:#24523e}
+button.quiet{background:transparent;color:var(--sub);padding:6px;text-decoration:underline;text-underline-offset:3px}
+.signal{margin-top:20px}.signal-title{display:flex;justify-content:space-between;align-items:baseline}
+.signal-title strong{font-weight:600}.value{font:600 1.65rem/1.1 var(--mono);letter-spacing:-.05em}
+.track{height:8px;border-radius:8px;background:#e1e6da;margin:9px 0 3px;overflow:hidden}
+.fill{height:100%;background:#427058;border-radius:8px}.axis{display:flex;justify-content:space-between;color:var(--sub);font: .77rem var(--mono)}
+code,pre{font-family:var(--mono)}.outcome{border-top:1px solid var(--line);padding-top:16px;margin-top:20px}.outcome p{margin:4px 0 0}
+.guard-panel{margin-top:16px}.table-wrap{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;text-align:left;width:100%;font-size:.9rem}
+th,td{border-bottom:1px solid var(--line);padding:10px 8px;vertical-align:middle}th{font:550 .78rem/1.4 var(--mono);color:var(--sub)}th:first-child,td:first-child{padding-left:0}th:last-child,td:last-child{padding-right:0}
+.name{font-weight:650}.guard-id{font: .78rem var(--mono);color:var(--sub);margin-right:8px}
+.terms{font: .81rem/1.55 var(--mono)}.state{font:.8rem var(--mono)}
+.enter,.leave{font-weight:650;padding:3px 7px;border-radius:4px;white-space:nowrap}.enter{background:var(--green-light);color:var(--green)}.leave{background:var(--terra-light);color:var(--terra)}
+.muted{color:var(--sub)}.error{color:#962a1c;font-weight:600}.error:empty{display:none}
+details{margin-top:16px}summary{cursor:pointer;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7ef;border-radius:6px;padding:12px;font-size:.84rem;margin:.6rem 0 0}
+.inline-code{font:.85em var(--mono);background:#eaeee3;padding:1px 4px;border-radius:3px}
+@media(max-width:700px){main{width:calc(100% - 24px);padding:18px 0 30px}.deck{grid-template-columns:1fr}.panel{padding:18px}.guard-panel .bar{display:block}.table-wrap{margin:10px -4px 0}th,td{padding:8px 4px}.terms{font-size:.72rem}.guard-id{display:block}.name{font-size:.82rem}h1{margin-top:24px}.lead{margin-bottom:16px}}
+@media(max-width:440px){th,td{font-size:.76rem}.guard-panel{padding:12px}.terms{font-size:.67rem}.state{font-size:.73rem}.enter,.leave{padding:2px 3px}.panel .bar{gap:5px}}
+</style>
+</head>
+<body>
+<main>
+<header><span class="mark" aria-hidden="true">≋</span> Guardshift<nav aria-label="Release links" style="margin-left:auto;font-size:.9rem"><a href="https://guardshift.tancurl3.chatgpt.site/guardshift-0.1.0.zip">Download source</a> · <a href="https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift">Benchmarks &amp; docs</a></nav></header>
+<h1>Which guards wake up?</h1>
+<p class="lead">Change several signals in one patch. A guard wakes up only when its truth changes between the starting state and the final state.</p>
+<div class="deck">
+<section class="panel" aria-labelledby="write-title">
+<h2 id="write-title">Signal patch</h2>
+<label for="scenario">Load an example</label>
+<select id="scenario">
+<option value="surge">Queue surge</option>
+<option value="jump">Jump across a watched band</option>
+<option value="atomic">Queue rises as workers run out</option>
+<option value="repeat">Write the same signal twice</option>
+</select>
+<p class="small" id="scenario-hint"></p>
+<label for="writes">Writes in order</label>
+<textarea id="writes" rows="2" spellcheck="false" aria-describedby="write-format error"></textarea>
+<p id="write-format" class="small">One integer assignment per line. The last write to each signal wins.</p>
+<p role="alert" id="error" class="error"></p>
+<div class="patch-actions"><button class="primary" id="apply" type="button">Apply atomic patch</button><button class="quiet" id="reset" type="button">Reset example</button></div>
+</section>
+<section class="panel" aria-labelledby="state-title">
+<div class="bar"><h2 id="state-title">Live signals</h2><span class="small" id="patch-count">Initial state</span></div>
+<div id="signals"></div>
+<div class="outcome" role="status" aria-live="polite" aria-atomic="true"><h3 id="out-title">Ready to apply</h3><p class="small" id="out-text"></p></div>
+</section></div>
+<section class="panel guard-panel" aria-labelledby="guard-title">
+<div class="bar"><h2 id="guard-title">Guard transitions</h2><span class="small">All conditions in a row must hold. Both endpoints count.</span></div>
+<div class="table-wrap"><table>
+<thead><tr><th scope="col">Guard</th><th scope="col">Conditions</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Event</th></tr></thead>
+<tbody id="guard-rows"></tbody>
+</table></div>
+<details><summary>Run the queue surge in C++17</summary>
+<p>Compare each guard before and after the entire patch. Guardshift returns the ID and new truth value of each changed guard. For the queue surge example, signals 0 and 1 represent queue depth and available workers.</p>
+<pre><code>#include "guardshift.hpp"
+#include &lt;iostream&gt;
+
+int main() {
+    guardshift::Index index({18, 6}, {
+        {{0, 20, 100}, {1, 1, 8}}, // Dispatch jobs
+        {{0, 40, 100}, {1, 0, 2}}, // Request capacity
+        {{0, 24, 36}},             // Watch midrange
+        {{1, 4, 8}}                // Hold reserves
+    });
+
+    for (auto change : index.apply({{0, 58}, {1, 1}}))
+        std::cout &lt;&lt; change.guard &lt;&lt; (change.active ? " entered" : " exited") &lt;&lt; '\n';
+}</code></pre>
+<p class="small">The browser evaluates each guard directly to illustrate the transitions. The C++ library indexes guard intervals. The browser accepts integers within the displayed scales.</p></details>
+</section>
+<noscript><p>Enable JavaScript to edit and apply a patch.</p></noscript>
+</main>
+<script>
+'use strict';
+const signals = [
+  {key:'queue', label:'Queued jobs', max:100},
+  {key:'workers', label:'Available workers', max:8}
+];
+const guards = [
+  {name:'Dispatch jobs', terms:[['queue',20,100],['workers',1,8]]},
+  {name:'Request capacity', terms:[['queue',40,100],['workers',0,2]]},
+  {name:'Watch midrange', terms:[['queue',24,36]]},
+  {name:'Hold reserves', terms:[['workers',4,8]]}
+];
+const scenarios = {
+  surge:{start:[18,6], writes:'queue = 58\nworkers = 1', hint:'A burst of jobs arrives while worker availability falls.'},
+  jump:{start:[18,6], writes:'queue = 94', hint:'Queue depth jumps from 18 to 94, passing over the entire [24, 36] band.'},
+  atomic:{start:[18,2], writes:'queue = 28\nworkers = 0', hint:'Dispatch would briefly turn on if each write were applied separately.'},
+  repeat:{start:[18,6], writes:'queue = 32\nqueue = 18', hint:'The second write restores the initial queue depth in the same patch.'}
+};
+const byId = id => document.getElementById(id);
+let current, patchCount, last;
+function evaluate(values) {
+  return guards.map(guard => guard.terms.every(([key, lo, hi]) => lo <= values[key] && values[key] <= hi));
+}
+function parseWrites(source) {
+  const writes = [];
+  for (const [i, raw] of source.split(/\r?\n/).entries()) {
+    if (!raw.trim()) continue;
+    const match = /^\s*(\w+)\s*=\s*([+-]?\d+)\s*$/.exec(raw);
+    if (!match) throw new Error('Line '+(i+1)+' needs signal = integer.');
+    const signal = signals.find(item => item.key === match[1]);
+    if (!signal) throw new Error('Line '+(i+1)+' needs queue or workers as the signal.');
+    const value = Number(match[2]);
+    if (!Number.isSafeInteger(value) || value < 0 || value > signal.max) {
+      throw new Error('Line '+(i+1)+' needs '+signal.key+' between 0 and '+signal.max+'.');
+    }
+    writes.push([signal.key,value]);
+  }
+  if (!writes.length) throw new Error('Enter at least one write.');
+  return writes;
+}
+function render() {
+  const after = evaluate(current);
+  const before = last ? last.before : after;
+  byId('patch-count').textContent = patchCount ? 'Patch '+patchCount : 'Initial state';
+  byId('signals').innerHTML = signals.map(({key,label,max}) => {
+    const value = current[key];
+    return '<div class="signal"><div class="signal-title"><strong>'+label+' <code class="inline-code">'+key+'</code></strong><span class="value">'+value+'</span></div>'+
+      '<div class="track" aria-hidden="true"><div class="fill" style="width:'+(100*value/max)+'%"></div></div><div class="axis"><span>0</span><span>'+max+'</span></div></div>';
+  }).join('');
+  byId('guard-rows').innerHTML = guards.map(({name,terms},id) => {
+    const changed = last && before[id] !== after[id];
+    const event = changed ? (after[id] ? '<span class="enter">Entered</span>' : '<span class="leave">Exited</span>') : '<span class="muted">—</span>';
+    return '<tr><td><span class="guard-id">#'+id+'</span><span class="name">'+name+'</span></td><td class="terms">'+
+      terms.map(([key,lo,hi])=>key+' ∈ ['+lo+', '+hi+']').join('<br>')+'</td><td class="state">'+before[id]+'</td><td class="state">'+after[id]+'</td><td>'+event+'</td></tr>';
+  }).join('');
+  const changed = after.map((truth,id)=>truth!==before[id]?id:null).filter(id=>id!==null);
+  byId('out-title').textContent = last ? (changed.length ? changed.length+' guard'+(changed.length===1?'':'s')+' changed' : 'No guards changed') : 'Ready to apply';
+  byId('out-text').textContent = last ? 'Changed guard IDs = ['+changed.join(', ')+']' : 'Choose an example or edit the patch, then apply it.';
+}
+function clearError() {
+  byId('error').textContent = '';
+  byId('writes').removeAttribute('aria-invalid');
+}
+function loadScenario() {
+  const example = scenarios[byId('scenario').value];
+  current = Object.fromEntries(signals.map(({key}, i)=>[key, example.start[i]]));
+  last = null;
+  patchCount = 0;
+  byId('writes').value = example.writes;
+  byId('scenario-hint').textContent = example.hint;
+  clearError();
+  render();
+}
+byId('apply').addEventListener('click', () => {
+  let writes;
+  try { writes = parseWrites(byId('writes').value); }
+  catch (error) {
+    byId('error').textContent = error.message;
+    byId('writes').setAttribute('aria-invalid','true');
+    byId('writes').focus();
+    return;
+  }
+  clearError();
+  last = {before:evaluate(current)};
+  for (const [key,value] of writes) current[key]=value;
+  patchCount++;
+  render();
+});
+byId('scenario').addEventListener('change', loadScenario);
+byId('reset').addEventListener('click', loadScenario);
+byId('writes').addEventListener('input', clearError);
+loadScenario();
+</script>
+</body>
+</html>
