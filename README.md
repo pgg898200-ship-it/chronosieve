@@ -144,7 +144,7 @@ The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector
 From a ChronoSieve checkout with CPython, setuptools, wheel and C/C++17 compilers:
 
 ```bash
-KTHWAKE_SOURCE=https://huggingface.co/spaces/pgg-engineering/kthwake/resolve/main/kthwake-0.1.0.tar.gz
+KTHWAKE_SOURCE='git+https://github.com/pgg898200-ship-it/chronosieve.git@7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f#subdirectory=companions/kthwake'
 python3 -m pip install --no-build-isolation . "${KTHWAKE_SOURCE}"
 python3 examples/alarm_escalation.py
 python3 examples/verify_alarm_escalation.py
