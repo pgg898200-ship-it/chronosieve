@@ -207,6 +207,10 @@ Tools exposed: `chronosieve_create_channel`, `chronosieve_ingest`, `chronosieve_
 
 ---
 
+## Route a wakeup to a worker
+
+ChronoSieve can signal when a stream changes. [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can combine that alarm with capacity, queue depth, or another integer condition and emit one enter/exit event per affected worker. The [runnable integration example](https://github.com/pgg898200-ship-it/chronosieve/blob/releases/guardshift/guardshift/examples/chronosieve_routing.py) feeds a batch through `EDetector` and dispatches the first alarm when capacity is available. [Try atomic updates in the browser](https://huggingface.co/spaces/pgg-engineering/guardshift).
+
 ## For AI & Coding Agents
 
 - Machine-readable index: [llms.txt](llms.txt)
