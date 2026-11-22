@@ -33,7 +33,7 @@ assert idx.apply([(1, 65)]) == [(0, True)]
 assert idx.active(0)
 ```
 
-C++ users can copy `include/guardshift.hpp` and its MIT license into a project.
+C++ users can copy `include/guardshift.hpp` and its MIT license into a project. [Edit the dispatch rule in Compiler Explorer](https://godbolt.org/z/d5jYnjzKW) and see how queue depth and worker utilization change it across three batches.
 
 ```sh
 c++ -O3 -std=c++17 -Iinclude examples/dispatch.cpp -o /tmp/dispatch
