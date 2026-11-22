@@ -59,6 +59,7 @@ TOOLS_SPEC: list[dict[str, Any]] = [
                 "epsilon": {"type": "number", "minimum": 0, "default": 0.05},
                 "edet_threshold": {"type": "number", "exclusiveMinimum": 1, "default": 500.0},
                 "rogue_threshold": {"type": "number", "exclusiveMinimum": 1, "default": 200.0},
+                "peer_relative_rogue": {"type": "boolean", "default": True},
                 "ring_capacity": {"type": "integer", "minimum": 64, "default": 65536},
                 "anomaly_burst": {"type": "integer", "minimum": 1, "default": 1},
                 "wake_cooldown": {"type": "integer", "minimum": 0, "default": 0},
@@ -174,6 +175,9 @@ class ChronoSieveMCPServer:
             if "channel" not in args or not isinstance(args["channel"], str) or not args["channel"]:
                 raise ValueError("channel must be a non-empty string")
             ch = args["channel"]
+            prr_raw = args.get("peer_relative_rogue", True)
+            if not isinstance(prr_raw, bool):
+                raise ValueError("peer_relative_rogue must be a boolean")
             pipe = ChronoSieve(
                 channel=ch,
                 n_agents=_strict_int(args.get("n_agents", 1), "n_agents"),
@@ -182,6 +186,7 @@ class ChronoSieveMCPServer:
                 epsilon=_strict_float(args.get("epsilon", 0.05), "epsilon"),
                 edet_threshold=_strict_float(args.get("edet_threshold", 500.0), "edet_threshold"),
                 rogue_threshold=_strict_float(args.get("rogue_threshold", 200.0), "rogue_threshold"),
+                peer_relative_rogue=prr_raw,
                 ring_capacity=_strict_int(args.get("ring_capacity", 65536), "ring_capacity"),
                 anomaly_burst=_strict_int(args.get("anomaly_burst", 1), "anomaly_burst"),
                 wake_cooldown=_strict_int(args.get("wake_cooldown", 0), "wake_cooldown"),

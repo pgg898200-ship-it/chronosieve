@@ -283,3 +283,51 @@ def test_extreme_scales_neon_parity_and_efusion_weight_invariants() -> None:
         cs.EDetector.__new__(cs.EDetector).step(1.0)
     with pytest.raises(RuntimeError):
         cs.EFusion.__new__(cs.EFusion).ingest_batch([1.0])
+
+
+def test_v02_simd_batch_kernels_match_scalar_step() -> None:
+    """Verify v0.2.0 register-resident SIMD batch kernels (Bounded, Symmetry, Catoni, Vovk Rank)
+    match sequential step() to < 1e-11 across one-sided, two-sided, auto-reset, and tie inputs."""
+    rng = np.random.default_rng(202602)
+    xs_u = rng.uniform(0.0, 1.0, size=300).astype(np.float64)
+    xs_g = rng.standard_normal(300).astype(np.float64)
+    xs_g[200:] += 0.8
+    xs_ties = np.concatenate([rng.integers(-5, 6, size=150).astype(np.float64), xs_g[:150]])
+
+    cases = [
+        ("bounded", "two_sided", xs_u, 0.5, 1.0, False),
+        ("bounded", "upper", xs_u, 0.5, 1.0, True),
+        ("symmetry", "two_sided", xs_g, 0.0, 1.0, False),
+        ("symmetry", "upper", xs_g, 0.0, 1.0, True),
+        ("catoni", "two_sided", xs_g, 0.0, 1.0, False),
+        ("catoni", "upper", xs_g, 0.0, 1.0, True),
+        ("vovk_rank", "two_sided", xs_ties, float("nan"), float("nan"), False),
+    ]
+    for fam, side, data, mu0, sig, ar in cases:
+        d_b = cs.EDetector(
+            family=fam, side=side, mu0=mu0, sigma=sig, threshold=25.0, max_prefix=128, seed=77, auto_reset=ar
+        )
+        d_s = cs.EDetector(
+            family=fam, side=side, mu0=mu0, sigma=sig, threshold=25.0, max_prefix=128, seed=77, auto_reset=ar
+        )
+        out_stats = np.empty(len(data), dtype=np.float64)
+        out_alarms = np.empty(len(data), dtype=np.uint8)
+        rb = d_b.ingest_batch(data, out_stats=out_stats, out_alarms=out_alarms)
+        step_stats = np.empty(len(data), dtype=np.float64)
+        step_alarms = np.empty(len(data), dtype=np.uint8)
+        rs: dict[str, object] = {}
+        for i, v in enumerate(data):
+            rs = d_s.step(float(v))
+            step_stats[i] = float(rs["stat"])  # type: ignore[arg-type]
+            step_alarms[i] = 1 if rs["alarmed"] else 0
+        assert np.allclose(out_stats, step_stats, rtol=1e-11, atol=1e-12), f"stat mismatch for {fam}/{side}"
+        assert np.array_equal(out_alarms, step_alarms), f"alarm mismatch for {fam}/{side}"
+        assert math.isclose(rb["stat"], float(rs["stat"]), rel_tol=1e-11, abs_tol=1e-12)  # type: ignore[arg-type]
+        assert rb["alarm_count"] == rs["alarm_count"]
+        # Also verify no-output fast path matches
+        d_no = cs.EDetector(
+            family=fam, side=side, mu0=mu0, sigma=sig, threshold=25.0, max_prefix=128, seed=77, auto_reset=ar
+        )
+        rno = d_no.ingest_batch(data)
+        assert math.isclose(rno["stat"], rb["stat"], rel_tol=1e-11, abs_tol=1e-12)
+        assert rno["alarm_count"] == rb["alarm_count"]

@@ -1,0 +1,134 @@
+name: ChronoSieve Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-sdist:
+    name: Build Source Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build & verify sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist --outdir dist/
+          python -m pip install --no-build-isolation --no-deps dist/*.tar.gz
+          python -c "import chronosieve as cs; print('sdist OK:', cs.__version__, cs.simd_backend())"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist/*.tar.gz
+
+  build-wheels:
+    name: Build Wheels (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64
+            os: macos-15
+            archs: arm64
+            env_avx2: "0"
+          - name: Linux manylinux x86_64
+            os: ubuntu-latest
+            archs: x86_64
+            env_avx2: "0"
+          - name: Windows amd64
+            os: windows-latest
+            archs: AMD64
+            env_avx2: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build wheels via cibuildwheel
+        uses: pypa/cibuildwheel@v2.23
+        env:
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+          CIBW_SKIP: "*-musllinux_*"
+          CIBW_ARCHS: ${{ matrix.archs }}
+          CIBW_ENVIRONMENT: "CHRONOSIEVE_AVX2=${{ matrix.env_avx2 }}"
+          CIBW_TEST_COMMAND: >
+            python -c "import chronosieve as cs; print(cs.__version__, cs.simd_backend());
+            d = cs.EDetector(family='catoni', mu0=0.0, sigma=1.0);
+            assert d.step(1.0)['step_count'] == 1;
+            r = cs.coma_merge([0.0, 0.5], [2.0, 2.5]); assert r['hull'] == (0.5, 2.0)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.archs }}-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  build-cli:
+    name: Build Standalone CLI (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            artifact: chronosieve-macos-arm64
+            cflags: "-O3"
+          - os: ubuntu-latest
+            artifact: chronosieve-linux-x86_64-avx2
+            cflags: "-O3 -mavx2 -mfma"
+          - os: ubuntu-latest
+            artifact: chronosieve-linux-x86_64-portable
+            cflags: "-O3 -DCS_FORCE_SCALAR=1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile & strip standalone CLI (<150 KB)
+        run: |
+          cc -std=c11 -Wall -Wextra -Wpedantic -Werror -Iinclude -Icsrc ${{ matrix.cflags }} \
+            csrc/edetector.c csrc/conformal.c csrc/fuser.c csrc/digest.c csrc/cli_main.c \
+            -lm -o ${{ matrix.artifact }}
+          strip ${{ matrix.artifact }}
+          if [ "$(uname -s)" = "Darwin" ]; then
+            codesign --sign - --force ${{ matrix.artifact }}
+          fi
+          chmod +x ${{ matrix.artifact }}
+          ./${{ matrix.artifact }} info
+          SIZE=$(wc -c < ${{ matrix.artifact }})
+          echo "Binary ${{ matrix.artifact }}: ${SIZE} bytes"
+          test "${SIZE}" -lt 153600
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-sdist, build-wheels, build-cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        working-directory: release-assets
+        run: |
+          ls -lh
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

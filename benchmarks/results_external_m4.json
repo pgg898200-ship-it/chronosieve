@@ -1,0 +1,202 @@
+{
+  "chronosieve_version": "0.2.0",
+  "chronosieve_simd": "NEON",
+  "platform": "macOS-15.3.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "python": "3.14.6",
+  "n_ticks": 100000,
+  "timing_method": "median_of_5",
+  "throughput": {
+    "chronosieve_bounded_batch": {
+      "ns_per_tick": 1.92875,
+      "m_ticks_per_sec": 518.4705119896306
+    },
+    "chronosieve_catoni_batch": {
+      "ns_per_tick": 4.06792,
+      "m_ticks_per_sec": 245.825876615076
+    },
+    "chronosieve_symmetry_batch": {
+      "ns_per_tick": 4.35458,
+      "m_ticks_per_sec": 229.6432721410561
+    },
+    "chronosieve_vovk_rank_batch": {
+      "ns_per_tick": 62.50333,
+      "m_ticks_per_sec": 15.999147565417715
+    },
+    "chronosieve_catoni_scalar_step": {
+      "ns_per_tick": 330.99416,
+      "m_ticks_per_sec": 3.0212013408333247
+    },
+    "chronosieve_bounded_scalar_step": {
+      "ns_per_tick": 325.12458,
+      "m_ticks_per_sec": 3.0757440732410943
+    },
+    "river_adwin": {
+      "installed": true,
+      "version": "0.27.0",
+      "ns_per_tick": 60.31792,
+      "m_ticks_per_sec": 16.578821020353487,
+      "speedup_chronosieve_catoni_batch": 14.827705559598026,
+      "speedup_chronosieve_catoni_scalar": 0.1822325807802772
+    },
+    "river_page_hinkley": {
+      "installed": true,
+      "version": "0.27.0",
+      "ns_per_tick": 222.09459,
+      "m_ticks_per_sec": 4.502586037777867,
+      "speedup_chronosieve_catoni_batch": 54.596597278215896,
+      "speedup_chronosieve_catoni_scalar": 0.6709924730998275
+    },
+    "river_kswin": {
+      "installed": true,
+      "version": "0.27.0",
+      "n_ticks": 20000,
+      "ns_per_tick": 158129.91665,
+      "m_ticks_per_sec": 0.006323914039702999,
+      "speedup_chronosieve_vovk_rank_batch": 2529.9438709905535,
+      "speedup_chronosieve_catoni_batch": 38872.425379555156
+    },
+    "ruptures_pelt_l2_2k_offline": {
+      "installed": true,
+      "version": "1.0.6",
+      "n_ticks": 2000,
+      "ms_total": 407.888458,
+      "ns_per_tick": 203944.229
+    },
+    "ruptures_pelt_rbf_2k_offline": {
+      "installed": true,
+      "version": "1.0.6",
+      "n_ticks": 2000,
+      "ms_total": 15844.664625,
+      "ns_per_tick": 7922332.3125
+    }
+  },
+  "statistical_validity": {
+    "chronosieve_catoni_gamma1000": {
+      "null_student_t3": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.3,
+        "empirical_arl_censored": 853.0166666666667
+      },
+      "shift_student_t3_plus2": {
+        "n_trials": 60,
+        "changepoint": 200,
+        "pre_shift_false_alarm_rate": 0.03333333333333333,
+        "post_shift_detection_rate_given_clean": 1.0,
+        "mean_delay_ticks": 13.172413793103448,
+        "median_delay_ticks": 13.5
+      }
+    },
+    "chronosieve_symmetry_gamma1000": {
+      "null_student_t3": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.5,
+        "empirical_arl_censored": 745.2333333333333
+      },
+      "shift_student_t3_plus2": {
+        "n_trials": 60,
+        "changepoint": 200,
+        "pre_shift_false_alarm_rate": 0.08333333333333333,
+        "post_shift_detection_rate_given_clean": 1.0,
+        "mean_delay_ticks": 12.363636363636363,
+        "median_delay_ticks": 12.0
+      },
+      "null_cauchy": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.5333333333333333,
+        "empirical_arl_censored": 710.8
+      }
+    },
+    "chronosieve_vovk_rank_gamma1000": {
+      "null_student_t3": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.5833333333333334,
+        "empirical_arl_censored": 715.5833333333334
+      },
+      "shift_student_t3_plus2": {
+        "n_trials": 60,
+        "changepoint": 200,
+        "pre_shift_false_alarm_rate": 0.05,
+        "post_shift_detection_rate_given_clean": 1.0,
+        "mean_delay_ticks": 14.192982456140351,
+        "median_delay_ticks": 15.0
+      },
+      "null_cauchy": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.5833333333333334,
+        "empirical_arl_censored": 727.85
+      }
+    },
+    "river_adwin_delta002": {
+      "null_student_t3": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.0,
+        "empirical_arl_censored": 1000.0
+      },
+      "null_cauchy": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.48333333333333334,
+        "empirical_arl_censored": 816.4
+      },
+      "shift_student_t3_plus2": {
+        "n_trials": 60,
+        "changepoint": 200,
+        "pre_shift_false_alarm_rate": 0.0,
+        "post_shift_detection_rate_given_clean": 1.0,
+        "mean_delay_ticks": 37.333333333333336,
+        "median_delay_ticks": 24.0
+      }
+    },
+    "river_page_hinkley_default": {
+      "null_student_t3": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.8833333333333333,
+        "empirical_arl_censored": 490.25
+      },
+      "null_cauchy": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 1.0,
+        "empirical_arl_censored": 50.13333333333333
+      },
+      "shift_student_t3_plus2": {
+        "n_trials": 60,
+        "changepoint": 200,
+        "pre_shift_false_alarm_rate": 0.2,
+        "post_shift_detection_rate_given_clean": 1.0,
+        "mean_delay_ticks": 19.3125,
+        "median_delay_ticks": 20.5
+      }
+    },
+    "river_kswin_alpha005": {
+      "null_student_t3": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.7333333333333333,
+        "empirical_arl_censored": 574.4666666666667
+      },
+      "null_cauchy": {
+        "n_trials": 60,
+        "horizon": 1000,
+        "false_alarm_rate": 0.7666666666666667,
+        "empirical_arl_censored": 565.6333333333333
+      },
+      "shift_student_t3_plus2": {
+        "n_trials": 60,
+        "changepoint": 200,
+        "pre_shift_false_alarm_rate": 0.11666666666666667,
+        "post_shift_detection_rate_given_clean": 1.0,
+        "mean_delay_ticks": 17.452830188679247,
+        "median_delay_ticks": 18.0
+      }
+    }
+  }
+}

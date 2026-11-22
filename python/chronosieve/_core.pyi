@@ -22,6 +22,20 @@ def coma_merge(
     seed: int = 0x243F6A8885A308D3,
 ) -> dict[str, Any]: ...
 
+def coma_merge_batch(
+    lowers_2d: Buffer | Sequence[float],
+    uppers_2d: Buffer | Sequence[float],
+    weights_2d: Buffer | Sequence[float] | None = None,
+    n_agents: int = 0,
+    tau: float = 0.5,
+    randomized: bool = False,
+    seed: int = 0x243F6A8885A308D3,
+    out_hull_lo: Buffer | None = None,
+    out_hull_hi: Buffer | None = None,
+    out_max_agreement: Buffer | None = None,
+    out_n_intervals: Buffer | None = None,
+) -> dict[str, Any]: ...
+
 class EDetector:
     stat: float
     step_count: int
@@ -153,6 +167,7 @@ class SleepingBOA:
         cal_window: int = 48,
         use_abs_loss: bool = False,
         quarantine_rogue: bool = True,
+        peer_relative_rogue: bool = True,
     ) -> None: ...
     def predict(
         self,

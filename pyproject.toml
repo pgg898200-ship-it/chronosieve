@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chronosieve"
-version = "0.1.0"
+version = "0.2.0"
 description = "Zero-dependency C11/SIMD streaming inference, conformal uncertainty, multi-agent fusion & LLM digest engine"
 readme = "README.md"
 license = {text = "MIT"}

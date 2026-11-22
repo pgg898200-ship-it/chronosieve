@@ -1,0 +1,4 @@
+include LICENSE README.md SKILL.md llms.txt llms-full.txt server.json
+include include/*.h
+include csrc/*.h csrc/*.c
+recursive-include python/chronosieve *.py *.pyi py.typed

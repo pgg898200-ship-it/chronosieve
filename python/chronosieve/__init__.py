@@ -12,6 +12,7 @@ from ._core import (
     SleepingBOA,
     StreamDigest,
     coma_merge,
+    coma_merge_batch,
     simd_backend,
     version,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "StreamDigest",
     "__version__",
     "coma_merge",
+    "coma_merge_batch",
     "simd_backend",
     "version",
 ]

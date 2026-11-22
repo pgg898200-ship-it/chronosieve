@@ -21,22 +21,36 @@ def _approx_bpe_tokens(text: str) -> int:
     return sum(max(1, (len(p) + 3) // 4) for p in parts)
 
 
+def _real_tiktoken_counts(text: str) -> dict[str, int] | None:
+    try:
+        import tiktoken
+    except Exception:
+        return None
+    out: dict[str, int] = {}
+    for enc_name in ("o200k_base", "cl100k_base"):
+        try:
+            enc = tiktoken.get_encoding(enc_name)
+            out[enc_name] = len(enc.encode(text))
+        except Exception:
+            continue
+    return out or None
+
+
 def build_eval_scenario(seed: int = 2026) -> dict[str, Any]:
     """Generate a multi-agent telemetry incident with ground-truth shift, anomaly, and rogue agent."""
     rng = np.random.default_rng(seed)
-    # Note: per-agent Catoni rogue attribution monitors raw |y - p_k|; a single ~86-sigma exogenous
-    # thermal spike at t=180 produces a ~4000x one-tick spike on healthy agents, whereas agent_2's
-    # persistent -12C hallucination exceeds 1e60. Setting rogue_threshold=50000 cleanly separates
-    # persistent agent drift from a single exogenous spike across 100/100 random seeds.
+    # Peer-relative excess residual rogue attribution (default peer_relative_rogue=True) cancels
+    # common exogenous spikes (like the ~86-sigma thermal spike at t=180) so healthy agents never
+    # false-quarantine even at standard rogue_threshold=200.0 across 100/100 random seeds.
     pipe = cs.ChronoSieve(
         channel="gpu_temp_c",
         n_agents=3,
         alpha=0.005,
         epsilon=0.5,
         edet_threshold=1000.0,
-        rogue_threshold=50000.0,
+        rogue_threshold=200.0,
         anomaly_burst=1,
-        wake_cooldown=5,
+        wake_cooldown=2,
         monitor_level=True,
     )
 
@@ -76,7 +90,9 @@ def build_eval_scenario(seed: int = 2026) -> dict[str, Any]:
     )
     prompt_c4 = len(prompt) // 4
     prompt_bpe = _approx_bpe_tokens(prompt)
-    return {
+    prompt_tt = _real_tiktoken_counts(prompt)
+    raw_tt = _real_tiktoken_counts(raw_json)
+    result: dict[str, Any] = {
         "ground_truth": {"shift_detected": True, "spike_t": 180, "rogue_agent": 2},
         "wake_count": len(wake_packets),
         "wake_ticks": wake_ticks,
@@ -93,6 +109,14 @@ def build_eval_scenario(seed: int = 2026) -> dict[str, Any]:
         "prompt_vs_raw_json_chars4_reduction_pct": 100.0 * (1.0 - prompt_c4 / raw_c4) if raw_c4 else 0.0,
         "prompt": prompt,
     }
+    if prompt_tt and raw_tt:
+        result["prompt_tiktoken"] = prompt_tt
+        result["raw_json_tiktoken"] = raw_tt
+        if "o200k_base" in prompt_tt and raw_tt.get("o200k_base", 0) > 0:
+            result["prompt_vs_raw_json_o200k_reduction_pct"] = 100.0 * (
+                1.0 - prompt_tt["o200k_base"] / raw_tt["o200k_base"]
+            )
+    return result
 
 
 def call_openai_compatible(prompt: str, model: str, api_key: str, base_url: str) -> str:

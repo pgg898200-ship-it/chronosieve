@@ -174,3 +174,64 @@ def test_fuser_edge_cases() -> None:
         cs.SleepingBOA(n_agents=2, cal_window=-1)
     with pytest.raises(RuntimeError):
         cs.SleepingBOA.__new__(cs.SleepingBOA).weights()
+
+
+def test_peer_relative_rogue_spike_immunity_and_fallbacks() -> None:
+    """Verify peer-relative excess residual cancels 86-sigma exogenous spikes, protects super-accurate
+    agents from all-zero warmup collapse, and falls back to raw residual when active_cnt < 3."""
+    rng = np.random.default_rng(2026)
+    T = 200
+    for K in (3, 5, 8):
+        y = np.full(T, 62.0, dtype=np.float64) + rng.normal(0.0, 0.25, size=T)
+        y[100] = 95.5  # 86-sigma exogenous common shock
+        y[150] = 95.5
+        preds = np.full((T, K), 62.0, dtype=np.float64) + rng.normal(0.0, 0.22, size=(T, K))
+        fus_peer = cs.SleepingBOA(n_agents=K, rogue_threshold=200.0, peer_relative_rogue=True)
+        fus_peer.fuse_batch(preds, y)
+        _, flags_peer = fus_peer.rogue_stats()
+        assert not any(flags_peer), f"K={K} false-quarantined under exogenous spikes: {flags_peer}"
+
+        # Raw residual mode (peer_relative_rogue=False) triggers false quarantine on the same shocks
+        fus_raw = cs.SleepingBOA(n_agents=K, rogue_threshold=200.0, peer_relative_rogue=False)
+        fus_raw.fuse_batch(preds, y)
+        _, flags_raw = fus_raw.rogue_stats()
+        assert any(flags_raw), f"K={K} raw mode expected to false-trigger on 86-sigma spikes"
+
+    # Super-accurate agent (sigma=0.02 vs peers 0.50) has all-zero excess during warmup;
+    # peer-median floor prevents sigma collapse so mild normal jitter does NOT false-quarantine it.
+    rng2 = np.random.default_rng(77)
+    y2 = np.zeros(220, dtype=np.float64)
+    p2 = np.column_stack(
+        [
+            rng2.normal(0.0, 0.02, size=220),
+            rng2.normal(0.0, 0.50, size=220),
+            rng2.normal(0.0, 0.50, size=220),
+            rng2.normal(0.0, 0.50, size=220),
+        ]
+    )
+    p2[120, 0] = 0.25  # Mild single-tick noise on accurate agent
+    for cw in (16, 48):
+        fus_acc = cs.SleepingBOA(
+            n_agents=4, cal_window=cw, rogue_threshold=200.0, peer_relative_rogue=True
+        )
+        fus_acc.fuse_batch(p2, y2)
+        _, fl_acc = fus_acc.rogue_stats()
+        assert fl_acc[0] is False, f"super-accurate agent 0 false-quarantined at cal_window={cw}: {fl_acc}"
+
+    # Large ensemble K=80 (> 64 quickselect median path + O(K) symmetric peer calibration)
+    y80 = rng2.normal(50.0, 0.2, size=200)
+    y80[100] = 150.0  # exogenous spike
+    p80 = 50.0 + rng2.normal(0.0, 0.25, size=(200, 80))
+    p80[110:, 79] += 10.0  # agent 79 goes rogue
+    fus80 = cs.SleepingBOA(n_agents=80, cal_window=16, rogue_threshold=200.0, peer_relative_rogue=True)
+    fus80.fuse_batch(p80, y80)
+    _, fl80 = fus80.rogue_stats()
+    assert fl80 == [False] * 79 + [True]
+
+    # Graceful raw-residual fallback when active_cnt == 2 (< 3)
+    fus_2 = cs.SleepingBOA(n_agents=2, rogue_threshold=150.0, peer_relative_rogue=True)
+    p_two = rng2.normal(0.0, 0.2, size=(160, 2))
+    p_two[80:, 1] += 4.0
+    fus_2.fuse_batch(p_two, np.zeros(160, dtype=np.float64))
+    _, fl_two = fus_2.rogue_stats()
+    assert fl_two == [False, True]

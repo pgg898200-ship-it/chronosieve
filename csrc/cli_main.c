@@ -423,37 +423,67 @@ static int cmd_bench(int argc, char **argv) {
 
     double *xs = (double *)malloc(buf_n * sizeof(double));
     double *ys = (double *)malloc(buf_n * sizeof(double));
-    if (!xs || !ys) {
+    double *zs = (double *)malloc(buf_n * sizeof(double));
+    if (!xs || !ys || !zs) {
         free(xs);
         free(ys);
+        free(zs);
         return 1;
     }
 
     uint64_t state = 0x123456789abcdef0ULL;
     for (size_t i = 0; i < buf_n; ++i) {
         state = state * 6364136223846793005ULL + 1442695040888963407ULL;
-        double u = (double)(state >> 11) * 0x1.0p-53 - 0.5;
+        double u01 = (double)(state >> 11) * 0x1.0p-53;
+        double u = u01 - 0.5;
+        zs[i] = u01;
         xs[i] = u * 2.0;
         ys[i] = sin((double)i * 0.01) + u * 0.04;
     }
 
     printf("ChronoSieve Native C11 Benchmark (N=%zu, SIMD=%s)\n", N, cs_simd_backend_name());
 
-    /* 1. Catoni E-SR batch */
+    /* 1a. Bounded Betting E-SR batch */
     cs_edet_config_t ecfg;
+    cs_edet_result_t eres;
+    cs_edet_config_default(&ecfg);
+    ecfg.family = CS_FAMILY_BOUNDED;
+    ecfg.mu0 = 0.5;
+    ecfg.threshold = 1.0e9;
+    cs_edetector_t *bnd = cs_edet_create(&ecfg);
+    double t0 = cs_now_ns();
+    cs_edet_step_batch(bnd, zs, N, NULL, NULL, &eres);
+    double dt_bnd = cs_now_ns() - t0;
+    printf("  Bounded E-SR (16-lane):     %6.2f ns/tick  (%7.1f M ticks/s)  stat=%.3f\n",
+           dt_bnd / (double)N, (double)N * 1.0e3 / dt_bnd, eres.stat);
+    cs_edet_destroy(bnd);
+
+    /* 1b. Catoni E-SR batch */
     cs_edet_config_default(&ecfg);
     ecfg.family = CS_FAMILY_CATONI;
     ecfg.mu0 = 0.0;
     ecfg.sigma = 1.0;
     ecfg.threshold = 1.0e9;
     cs_edetector_t *cat = cs_edet_create(&ecfg);
-    double t0 = cs_now_ns();
-    cs_edet_result_t eres;
+    t0 = cs_now_ns();
     cs_edet_step_batch(cat, xs, N, NULL, NULL, &eres);
     double dt_cat = cs_now_ns() - t0;
     printf("  Catoni E-SR (16-lane):      %6.2f ns/tick  (%7.1f M ticks/s)  stat=%.3f\n",
            dt_cat / (double)N, (double)N * 1.0e3 / dt_cat, eres.stat);
     cs_edet_destroy(cat);
+
+    /* 1c. Symmetry E-SR batch */
+    cs_edet_config_default(&ecfg);
+    ecfg.family = CS_FAMILY_SYMMETRY;
+    ecfg.mu0 = 0.0;
+    ecfg.threshold = 1.0e9;
+    cs_edetector_t *sym = cs_edet_create(&ecfg);
+    t0 = cs_now_ns();
+    cs_edet_step_batch(sym, xs, N, NULL, NULL, &eres);
+    double dt_sym = cs_now_ns() - t0;
+    printf("  Symmetry E-SR (16-lane):    %6.2f ns/tick  (%7.1f M ticks/s)  stat=%.3f\n",
+           dt_sym / (double)N, (double)N * 1.0e3 / dt_sym, eres.stat);
+    cs_edet_destroy(sym);
 
     /* 2. Vovk Rank B-tree (N_rank = min(N, 200000)) */
     size_t N_rank = (N < 200000U) ? N : 200000U;
@@ -500,7 +530,25 @@ static int cmd_bench(int argc, char **argv) {
            dt_boa / (double)T_boa, (double)T_boa * 1.0e3 / dt_boa, fres.prediction);
     cs_fuser_destroy(fus);
 
-    /* 5. Swing PLA + Ring Buffer */
+    /* 5. Online COMA Batch (K=8 agents) */
+    {
+        size_t T_coma = (buf_n / K < 100000U) ? (buf_n / K) : 100000U;
+        if (T_coma == 0U) T_coma = 1U;
+        double *hi_mat = (double *)malloc(T_coma * K * sizeof(double));
+        if (hi_mat) {
+            for (size_t i = 0; i < T_coma * K; ++i) hi_mat[i] = xs[i] + 2.0;
+            cs_coma_result_t cres;
+            t0 = cs_now_ns();
+            cs_coma_merge_batch(xs, hi_mat, NULL, false, T_coma, K, 0.5, false, NULL,
+                                NULL, NULL, NULL, NULL, &cres);
+            double dt_coma = cs_now_ns() - t0;
+            printf("  Online COMA Batch (K=8):    %6.2f ns/step  (%7.2f M steps/s)  agree=%.2f\n",
+                   dt_coma / (double)T_coma, (double)T_coma * 1.0e3 / dt_coma, cres.max_agreement);
+            free(hi_mat);
+        }
+    }
+
+    /* 6. Swing PLA + Ring Buffer */
     double *ts = (double *)malloc(N * sizeof(double));
     if (ts) {
         for (size_t i = 0; i < N; ++i) ts[i] = (double)i;
@@ -520,6 +568,7 @@ static int cmd_bench(int argc, char **argv) {
 
     free(xs);
     free(ys);
+    free(zs);
     return 0;
 }
 

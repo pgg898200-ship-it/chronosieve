@@ -52,7 +52,7 @@ test: cli test-c test-parity
 
 lint:
 	$(CC) $(BASE_CFLAGS) -fsyntax-only $(CORE_SRCS) csrc/cli_main.c
-	ruff check python/ tests/ benchmarks/ setup.py
+	ruff check python/ tests/ benchmarks/ examples/ scripts/ setup.py
 	mypy python/chronosieve
 
 bench: cli

@@ -10,7 +10,7 @@
 #define CS_LOG_MAX 690.0
 
 const char *cs_version_string(void) {
-    return "0.1.0";
+    return "0.2.0";
 }
 
 const char *cs_simd_backend_name(void) {
@@ -316,10 +316,10 @@ cs_status_t cs_edet_calibrate_catoni(
     double sigma_eff = sd * sqrt(infl);
     double mu_eff = mean;
     if (side == CS_SIDE_UPPER) {
-        /* Composite null E[X] <= mu_eff holds with high probability over finite warmup */
-        mu_eff = mean + (z / sqrt(dn)) * sd;
+        /* Composite null E[X] <= mu_eff using kurtosis-inflated sigma_eff */
+        mu_eff = mean + (z / sqrt(dn)) * sigma_eff;
     } else if (side == CS_SIDE_LOWER) {
-        mu_eff = mean - (z / sqrt(dn)) * sd;
+        mu_eff = mean - (z / sqrt(dn)) * sigma_eff;
     }
     if (!isfinite(sigma_eff) || sigma_eff <= 0.0 || !isfinite(mu_eff)) {
         return CS_ERR_NONFINITE;
@@ -505,14 +505,13 @@ cs_status_t cs_edet_eval_lanes(cs_edetector_t *det, double x, double out_e[CS_ED
             break;
         case CS_FAMILY_VOVK_RANK: {
             /* Deterministic epoch reset when B-tree hits max_prefix (preserves exact iid U(0,1)) */
-            if (det->btree.total_count >= det->cfg.max_prefix) {
+            if (CS_UNLIKELY(det->btree.total_count >= det->cfg.max_prefix)) {
                 cs_btree_clear(&det->btree);
                 det->epoch_count++;
             }
-            uint32_t less = 0, equal = 0;
-            cs_btree_rank_query(&det->btree, x, &less, &equal);
-            cs_status_t st = cs_btree_insert(&det->btree, x);
-            if (st != CS_OK) {
+            uint32_t less = 0U, equal = 0U;
+            cs_status_t st = cs_btree_rank_and_insert(&det->btree, x, &less, &equal);
+            if (CS_UNLIKELY(st != CS_OK)) {
                 return st;
             }
             double u = cs_rng_uniform01(&det->rng);
@@ -681,38 +680,208 @@ cs_status_t cs_edet_step(cs_edetector_t *det, double x, cs_edet_result_t *out) {
     return CS_OK;
 }
 
-/* Register-resident NEON hot batch kernel for Catoni E-SR (zero-exp, zero state loads/stores) */
-#if defined(CS_SIMD_NEON)
-static cs_status_t cs_edet_batch_catoni_esr_neon(
+/* Internal zero-log fast Catoni E-SR single-step (used by SleepingBOA per-agent rogue monitors). */
+cs_status_t cs_edet_step_catoni_esr_fast(
     cs_edetector_t *det,
-    const double *xs,
+    double x,
+    double *out_stat,
+    bool *out_alarmed)
+{
+    if (CS_UNLIKELY(!det)) {
+        return CS_ERR_INVALID;
+    }
+    if (CS_UNLIKELY(det->eff_family != CS_FAMILY_CATONI || det->cfg.accum != CS_ACCUM_ESR)) {
+        cs_edet_result_t r;
+        cs_status_t st = cs_edet_step(det, x, &r);
+        if (st == CS_OK) {
+            if (out_stat) *out_stat = r.stat;
+            if (out_alarmed) *out_alarmed = r.alarmed;
+        }
+        return st;
+    }
+    if (CS_UNLIKELY(!isfinite(x))) {
+        return CS_ERR_NONFINITE;
+    }
+
+    const double d = cs_clamp_diff(x, det->cfg.mu0, det->d_clamp);
+    const double * CS_RESTRICT lam = det->lam;
+    const double * CS_RESTRICT invd = det->inv_denom;
+    double * CS_RESTRICT acc = det->acc;
+    double stat = 0.0;
+
+#if defined(CS_SIMD_NEON)
+    const float64x2_t vone = vdupq_n_f64(1.0);
+    const float64x2_t vhalf = vdupq_n_f64(0.5);
+    const float64x2_t vzero = vdupq_n_f64(0.0);
+    const float64x2_t vd = vdupq_n_f64(d);
+    float64x2_t rsum0 = vdupq_n_f64(0.0);
+    float64x2_t rsum1 = vdupq_n_f64(0.0);
+
+    /* Completely branchless 16-lane Catoni E-SR step (avoids 50%-random x==0 / d<0 mispredicts). */
+    for (size_t i = 0; i < 16U; i += 4U) {
+        float64x2_t y0 = vmulq_f64(vld1q_f64(lam + i), vd);
+        float64x2_t y1 = vmulq_f64(vld1q_f64(lam + i + 2U), vd);
+        float64x2_t t0 = vfmaq_f64(vone, vhalf, vmulq_f64(y0, y0));
+        float64x2_t t1 = vfmaq_f64(vone, vhalf, vmulq_f64(y1, y1));
+        float64x2_t id0 = vld1q_f64(invd + i);
+        float64x2_t id1 = vld1q_f64(invd + i + 2U);
+        float64x2_t e0 = vbslq_f64(vcgeq_f64(y0, vzero),
+                                   vmulq_f64(vaddq_f64(t0, y0), id0),
+                                   vdivq_f64(id0, vsubq_f64(t0, y0)));
+        float64x2_t e1 = vbslq_f64(vcgeq_f64(y1, vzero),
+                                   vmulq_f64(vaddq_f64(t1, y1), id1),
+                                   vdivq_f64(id1, vsubq_f64(t1, y1)));
+        float64x2_t r0 = vfmaq_f64(e0, vld1q_f64(acc + i), e0);
+        float64x2_t r1 = vfmaq_f64(e1, vld1q_f64(acc + i + 2U), e1);
+        vst1q_f64(acc + i, r0);
+        vst1q_f64(acc + i + 2U, r1);
+        rsum0 = vaddq_f64(rsum0, r0);
+        rsum1 = vaddq_f64(rsum1, r1);
+    }
+    double r_sum = vaddvq_f64(vaddq_f64(rsum0, rsum1));
+    if (CS_UNLIKELY(r_sum > CS_ACC_CAP)) {
+        const float64x2_t vcap = vdupq_n_f64(CS_ACC_CAP);
+        float64x2_t cs = vdupq_n_f64(0.0);
+        for (size_t i = 0; i < 16U; i += 2U) {
+            float64x2_t rc = vminq_f64(vld1q_f64(acc + i), vcap);
+            vst1q_f64(acc + i, rc);
+            cs = vaddq_f64(cs, rc);
+        }
+        r_sum = vaddvq_f64(cs);
+    }
+    stat = r_sum * (1.0 / 16.0);
+#elif defined(CS_SIMD_AVX2)
+    const __m256d vone = _mm256_set1_pd(1.0);
+    const __m256d vhalf = _mm256_set1_pd(0.5);
+    const __m256d vzero = _mm256_setzero_pd();
+    const __m256d vd = _mm256_set1_pd(d);
+    __m256d rsum = _mm256_setzero_pd();
+
+    for (size_t i = 0; i < 16U; i += 4U) {
+        __m256d y = _mm256_mul_pd(_mm256_loadu_pd(lam + i), vd);
+        __m256d t = cs_avx_fmadd(vhalf, _mm256_mul_pd(y, y), vone);
+        __m256d id = _mm256_loadu_pd(invd + i);
+        __m256d e = _mm256_blendv_pd(
+            _mm256_div_pd(id, _mm256_sub_pd(t, y)),
+            _mm256_mul_pd(_mm256_add_pd(t, y), id),
+            _mm256_cmp_pd(y, vzero, _CMP_GE_OQ));
+        __m256d r = cs_avx_fmadd(_mm256_loadu_pd(acc + i), e, e);
+        _mm256_storeu_pd(acc + i, r);
+        rsum = _mm256_add_pd(rsum, r);
+    }
+    double rtmp[4];
+    _mm256_storeu_pd(rtmp, rsum);
+    double r_sum = (rtmp[0] + rtmp[1]) + (rtmp[2] + rtmp[3]);
+    if (CS_UNLIKELY(r_sum > CS_ACC_CAP)) {
+        const __m256d vcap = _mm256_set1_pd(CS_ACC_CAP);
+        __m256d cs = _mm256_setzero_pd();
+        for (size_t i = 0; i < 16U; i += 4U) {
+            __m256d rc = _mm256_min_pd(_mm256_loadu_pd(acc + i), vcap);
+            _mm256_storeu_pd(acc + i, rc);
+            cs = _mm256_add_pd(cs, rc);
+        }
+        _mm256_storeu_pd(rtmp, cs);
+        r_sum = (rtmp[0] + rtmp[1]) + (rtmp[2] + rtmp[3]);
+    }
+    stat = r_sum * (1.0 / 16.0);
+#else
+    double r_sum = 0.0;
+    for (size_t i = 0; i < 16U; ++i) {
+        double y = lam[i] * d;
+        double t = 1.0 + 0.5 * y * y;
+        double e = (y >= 0.0) ? ((t + y) * invd[i]) : (invd[i] / (t - y));
+        double r = (acc[i] + 1.0) * e;
+        if (r > CS_ACC_CAP) r = CS_ACC_CAP;
+        acc[i] = r;
+        r_sum += r;
+    }
+    stat = r_sum * (1.0 / 16.0);
+#endif
+
+    det->step_count++;
+    det->cur_stat = stat;
+    bool alarmed = (stat >= det->cfg.threshold);
+    if (CS_UNLIKELY(alarmed)) {
+        det->alarm_count++;
+        if (det->cfg.auto_reset) {
+            cs_edet_reset(det);
+        }
+    }
+    if (out_stat) {
+        *out_stat = stat;
+    }
+    if (out_alarmed) {
+        *out_alarmed = alarmed;
+    }
+    return CS_OK;
+}
+
+#if defined(CS_SIMD_NEON) || defined(CS_SIMD_AVX2)
+static void cs_edet_finalize_batch(
+    cs_edetector_t *det,
+    double stat,
+    double last_e_mean,
+    double last_p_value,
+    bool alarmed,
+    cs_edet_result_t *last_out)
+{
+    const bool ar = (alarmed && det->cfg.auto_reset);
+    det->cur_stat = ar ? 0.0 : stat;
+    det->last_e_mean = ar ? 1.0 : last_e_mean;
+    det->last_p_value = ar ? NAN : last_p_value;
+    if (last_out) {
+        last_out->stat = stat;
+        last_out->log_stat = log((stat > 1.0e-300) ? stat : 1.0e-300);
+        last_out->last_e_mean = last_e_mean;
+        last_out->last_p_value = last_p_value;
+        last_out->step_count = det->step_count;
+        last_out->alarm_count = det->alarm_count;
+        last_out->epoch_count = det->epoch_count;
+        last_out->alarmed = alarmed;
+    }
+}
+#endif
+
+/* =========================================================================
+ * Register-Resident NEON Hot Batch Kernels (Catoni, Bounded, Symmetry, Rank)
+ * ========================================================================= */
+#if defined(CS_SIMD_NEON)
+
+static inline double cs_neon_sum16(
+    float64x2_t r0, float64x2_t r1, float64x2_t r2, float64x2_t r3,
+    float64x2_t r4, float64x2_t r5, float64x2_t r6, float64x2_t r7)
+{
+    float64x2_t s01 = vaddq_f64(r0, r1);
+    float64x2_t s23 = vaddq_f64(r2, r3);
+    float64x2_t s45 = vaddq_f64(r4, r5);
+    float64x2_t s67 = vaddq_f64(r6, r7);
+    return vaddvq_f64(vaddq_f64(vaddq_f64(s01, s23), vaddq_f64(s45, s67)));
+}
+
+/* Dedicated zero-spill two-sided Catoni E-SR kernel (4 vdivq_f64/tick, lazy cap clamp) */
+static cs_status_t cs_edet_batch_catoni_2s_esr_neon(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
     size_t n,
-    double *out_stats,
-    uint8_t *out_alarms,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
     cs_edet_result_t *last_out)
 {
     const double mu0 = det->cfg.mu0;
     const double d_clamp = det->d_clamp;
     const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
     const bool auto_reset = det->cfg.auto_reset;
+    const bool no_out = (!out_stats && !out_alarms);
 
-    float64x2_t l0 = vld1q_f64(det->lam + 0);
-    float64x2_t l1 = vld1q_f64(det->lam + 2);
-    float64x2_t l2 = vld1q_f64(det->lam + 4);
-    float64x2_t l3 = vld1q_f64(det->lam + 6);
-    float64x2_t l4 = vld1q_f64(det->lam + 8);
-    float64x2_t l5 = vld1q_f64(det->lam + 10);
-    float64x2_t l6 = vld1q_f64(det->lam + 12);
-    float64x2_t l7 = vld1q_f64(det->lam + 14);
-
-    float64x2_t d0 = vld1q_f64(det->inv_denom + 0);
-    float64x2_t d1 = vld1q_f64(det->inv_denom + 2);
-    float64x2_t d2 = vld1q_f64(det->inv_denom + 4);
-    float64x2_t d3 = vld1q_f64(det->inv_denom + 6);
-    float64x2_t d4 = vld1q_f64(det->inv_denom + 8);
-    float64x2_t d5 = vld1q_f64(det->inv_denom + 10);
-    float64x2_t d6 = vld1q_f64(det->inv_denom + 12);
-    float64x2_t d7 = vld1q_f64(det->inv_denom + 14);
+    const float64x2_t l0 = vld1q_f64(det->lam + 0);
+    const float64x2_t l1 = vld1q_f64(det->lam + 2);
+    const float64x2_t l2 = vld1q_f64(det->lam + 4);
+    const float64x2_t l3 = vld1q_f64(det->lam + 6);
+    const float64x2_t d0 = vld1q_f64(det->inv_denom + 0);
+    const float64x2_t d1 = vld1q_f64(det->inv_denom + 2);
+    const float64x2_t d2 = vld1q_f64(det->inv_denom + 4);
+    const float64x2_t d3 = vld1q_f64(det->inv_denom + 6);
 
     float64x2_t r0 = vld1q_f64(det->acc + 0);
     float64x2_t r1 = vld1q_f64(det->acc + 2);
@@ -726,84 +895,87 @@ static cs_status_t cs_edet_batch_catoni_esr_neon(
     const float64x2_t vone = vdupq_n_f64(1.0);
     const float64x2_t vhalf = vdupq_n_f64(0.5);
     const float64x2_t vzero = vdupq_n_f64(0.0);
-    const float64x2_t vcap = vdupq_n_f64(CS_ACC_CAP);
 
-    double stat = det->cur_stat;
+    double sum = det->cur_stat * 16.0;
     bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
 
-#define CS_CATONI_STEP_LANE(r, l, invd)                                      \
-    do {                                                                     \
-        float64x2_t y_ = vmulq_f64((l), vdx);                                \
-        float64x2_t t_ = vfmaq_f64(vone, vhalf, vmulq_f64(y_, y_));          \
-        float64x2_t pos_ = vaddq_f64(t_, y_);                                \
-        float64x2_t neg_ = vdivq_f64(vone, vsubq_f64(t_, y_));               \
-        float64x2_t psi_ = vbslq_f64(vcgeq_f64(y_, vzero), pos_, neg_);      \
-        float64x2_t e_ = vmulq_f64(psi_, (invd));                            \
-        (r) = vminq_f64(vmulq_f64(vaddq_f64((r), vone), e_), vcap);          \
+#define CS_CATONI_2S_STEP_NEON(rp, rn, lk, dk)                                \
+    do {                                                                      \
+        float64x2_t y_ = vmulq_f64((lk), vabsdx);                             \
+        float64x2_t pos_ = vfmaq_f64(vone, y_, vfmaq_f64(vone, vhalf, y_));   \
+        float64x2_t ep_ = vmulq_f64(pos_, (dk));                              \
+        float64x2_t en_ = vdivq_f64((dk), pos_);                              \
+        float64x2_t el_ = vbslq_f64(mpos, ep_, en_);                          \
+        float64x2_t eh_ = vbslq_f64(mpos, en_, ep_);                          \
+        (rp) = vfmaq_f64(el_, (rp), el_);                                     \
+        (rn) = vfmaq_f64(eh_, (rn), eh_);                                     \
     } while (0)
 
-    for (size_t t = 0; t < n; ++t) {
-        double x = xs[t];
-        if (!isfinite(x)) {
-            vst1q_f64(det->acc + 0, r0);
-            vst1q_f64(det->acc + 2, r1);
-            vst1q_f64(det->acc + 4, r2);
-            vst1q_f64(det->acc + 6, r3);
-            vst1q_f64(det->acc + 8, r4);
-            vst1q_f64(det->acc + 10, r5);
-            vst1q_f64(det->acc + 12, r6);
-            vst1q_f64(det->acc + 14, r7);
-            if (t > 0U) {
-                det->cur_stat = (alarmed && auto_reset) ? 0.0 : stat;
-                if (alarmed && auto_reset) {
-                    det->last_e_mean = 1.0;
-                } else {
-                    double e_prev[CS_EDET_LANES];
-                    cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[t - 1U], e_prev);
-                    double esum = 0.0;
-                    for (size_t m = 0; m < CS_EDET_LANES; ++m) {
-                        esum += e_prev[m];
-                    }
-                    det->last_e_mean = esum * (1.0 / 16.0);
+#define CS_NEON_CLAMP_LAZY(sum_v)                                             \
+    do {                                                                      \
+        if (CS_UNLIKELY((sum_v) > CS_ACC_CAP)) {                              \
+            const float64x2_t vcap_ = vdupq_n_f64(CS_ACC_CAP);                \
+            r0 = vminq_f64(r0, vcap_); r1 = vminq_f64(r1, vcap_);             \
+            r2 = vminq_f64(r2, vcap_); r3 = vminq_f64(r3, vcap_);             \
+            r4 = vminq_f64(r4, vcap_); r5 = vminq_f64(r5, vcap_);             \
+            r6 = vminq_f64(r6, vcap_); r7 = vminq_f64(r7, vcap_);             \
+            (sum_v) = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);          \
+        }                                                                     \
+    } while (0)
+
+    if (no_out) {
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            double dx = cs_clamp_diff(x, mu0, d_clamp);
+            float64x2_t vabsdx = vdupq_n_f64(fabs(dx));
+            uint64x2_t mpos = vcgeq_f64(vdupq_n_f64(dx), vzero);
+
+            CS_CATONI_2S_STEP_NEON(r0, r4, l0, d0);
+            CS_CATONI_2S_STEP_NEON(r1, r5, l1, d1);
+            CS_CATONI_2S_STEP_NEON(r2, r6, l2, d2);
+            CS_CATONI_2S_STEP_NEON(r3, r7, l3, d3);
+
+            sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+            CS_NEON_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
                 }
             }
-            return CS_ERR_NONFINITE;
         }
-        float64x2_t vdx = vdupq_n_f64(cs_clamp_diff(x, mu0, d_clamp));
+    } else {
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            double dx = cs_clamp_diff(x, mu0, d_clamp);
+            float64x2_t vabsdx = vdupq_n_f64(fabs(dx));
+            uint64x2_t mpos = vcgeq_f64(vdupq_n_f64(dx), vzero);
 
-        CS_CATONI_STEP_LANE(r0, l0, d0);
-        CS_CATONI_STEP_LANE(r1, l1, d1);
-        CS_CATONI_STEP_LANE(r2, l2, d2);
-        CS_CATONI_STEP_LANE(r3, l3, d3);
-        CS_CATONI_STEP_LANE(r4, l4, d4);
-        CS_CATONI_STEP_LANE(r5, l5, d5);
-        CS_CATONI_STEP_LANE(r6, l6, d6);
-        CS_CATONI_STEP_LANE(r7, l7, d7);
+            CS_CATONI_2S_STEP_NEON(r0, r4, l0, d0);
+            CS_CATONI_2S_STEP_NEON(r1, r5, l1, d1);
+            CS_CATONI_2S_STEP_NEON(r2, r6, l2, d2);
+            CS_CATONI_2S_STEP_NEON(r3, r7, l3, d3);
 
-        float64x2_t s01 = vaddq_f64(r0, r1);
-        float64x2_t s23 = vaddq_f64(r2, r3);
-        float64x2_t s45 = vaddq_f64(r4, r5);
-        float64x2_t s67 = vaddq_f64(r6, r7);
-        float64x2_t s03 = vaddq_f64(s01, s23);
-        float64x2_t s47 = vaddq_f64(s45, s67);
-        stat = vaddvq_f64(vaddq_f64(s03, s47)) * (1.0 / 16.0);
-
-        det->step_count++;
-        alarmed = (stat >= thr);
-        if (out_stats) {
-            out_stats[t] = stat;
-        }
-        if (out_alarms) {
-            out_alarms[t] = alarmed ? 1U : 0U;
-        }
-        if (alarmed) {
-            det->alarm_count++;
-            if (auto_reset) {
-                r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+            sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+            CS_NEON_CLAMP_LAZY(sum);
+            double stat = sum * (1.0 / 16.0);
+            alarmed = (stat >= thr);
+            if (out_stats) out_stats[t] = stat;
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+                }
             }
         }
     }
-#undef CS_CATONI_STEP_LANE
+#undef CS_CATONI_2S_STEP_NEON
 
     vst1q_f64(det->acc + 0, r0);
     vst1q_f64(det->acc + 2, r1);
@@ -813,31 +985,1191 @@ static cs_status_t cs_edet_batch_catoni_esr_neon(
     vst1q_f64(det->acc + 10, r5);
     vst1q_f64(det->acc + 12, r6);
     vst1q_f64(det->acc + 14, r7);
+    det->step_count += n;
+    det->alarm_count = alarms;
 
-    double e_last[CS_EDET_LANES];
-    cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[n - 1U], e_last);
-    double last_esum = 0.0;
-    for (size_t m = 0; m < CS_EDET_LANES; ++m) {
-        last_esum += e_last[m];
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[n - 1U], e_last);
+        double last_esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) last_esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), last_esum * (1.0 / 16.0), NAN, alarmed, last_out);
     }
-    double last_e_mean = last_esum * (1.0 / 16.0);
+    return CS_OK;
 
-    det->cur_stat = (alarmed && auto_reset) ? 0.0 : stat;
-    det->last_e_mean = (alarmed && auto_reset) ? 1.0 : last_e_mean;
-    det->last_p_value = NAN;
-    if (last_out) {
-        last_out->stat = stat;
-        last_out->log_stat = log((stat > 1.0e-300) ? stat : 1.0e-300);
-        last_out->last_e_mean = last_e_mean;
-        last_out->last_p_value = NAN;
-        last_out->step_count = det->step_count;
-        last_out->alarm_count = det->alarm_count;
-        last_out->epoch_count = det->epoch_count;
-        last_out->alarmed = alarmed;
+err_nonfinite:
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_catoni_1s_esr_neon(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double d_clamp = det->d_clamp;
+    const double thr = det->cfg.threshold;
+    const bool auto_reset = det->cfg.auto_reset;
+
+    float64x2_t r0 = vld1q_f64(det->acc + 0);
+    float64x2_t r1 = vld1q_f64(det->acc + 2);
+    float64x2_t r2 = vld1q_f64(det->acc + 4);
+    float64x2_t r3 = vld1q_f64(det->acc + 6);
+    float64x2_t r4 = vld1q_f64(det->acc + 8);
+    float64x2_t r5 = vld1q_f64(det->acc + 10);
+    float64x2_t r6 = vld1q_f64(det->acc + 12);
+    float64x2_t r7 = vld1q_f64(det->acc + 14);
+
+    const float64x2_t vone = vdupq_n_f64(1.0);
+    const float64x2_t vhalf = vdupq_n_f64(0.5);
+    const float64x2_t vzero = vdupq_n_f64(0.0);
+    const double * CS_RESTRICT lam = det->lam;
+    const double * CS_RESTRICT invd = det->inv_denom;
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+#define CS_CATONI_1S_STEP_NEON(r, off)                                        \
+    do {                                                                      \
+        float64x2_t y_ = vmulq_f64(vld1q_f64(lam + (off)), vdx);              \
+        float64x2_t id_ = vld1q_f64(invd + (off));                            \
+        float64x2_t t_ = vfmaq_f64(vone, vhalf, vmulq_f64(y_, y_));           \
+        float64x2_t ep_ = vmulq_f64(vaddq_f64(t_, y_), id_);                  \
+        float64x2_t en_ = vdivq_f64(id_, vsubq_f64(t_, y_));                  \
+        float64x2_t e_ = vbslq_f64(vcgeq_f64(y_, vzero), ep_, en_);           \
+        (r) = vfmaq_f64(e_, (r), e_);                                         \
+    } while (0)
+
+    for (; t < n; ++t) {
+        double x = xs[t];
+        if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+        float64x2_t vdx = vdupq_n_f64(cs_clamp_diff(x, mu0, d_clamp));
+
+        CS_CATONI_1S_STEP_NEON(r0, 0);
+        CS_CATONI_1S_STEP_NEON(r1, 2);
+        CS_CATONI_1S_STEP_NEON(r2, 4);
+        CS_CATONI_1S_STEP_NEON(r3, 6);
+        CS_CATONI_1S_STEP_NEON(r4, 8);
+        CS_CATONI_1S_STEP_NEON(r5, 10);
+        CS_CATONI_1S_STEP_NEON(r6, 12);
+        CS_CATONI_1S_STEP_NEON(r7, 14);
+
+        sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+        CS_NEON_CLAMP_LAZY(sum);
+        double stat = sum * (1.0 / 16.0);
+        alarmed = (stat >= thr);
+        if (out_stats) out_stats[t] = stat;
+        if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+        if (CS_UNLIKELY(alarmed)) {
+            alarms++;
+            if (auto_reset) {
+                r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+            }
+        }
+    }
+#undef CS_CATONI_1S_STEP_NEON
+
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[n - 1U], e_last);
+        double last_esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) last_esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), last_esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_bounded_esr_neon(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const bool auto_reset = det->cfg.auto_reset;
+    const bool no_out = (!out_stats && !out_alarms);
+
+    const float64x2_t l0 = vld1q_f64(det->lam + 0);
+    const float64x2_t l1 = vld1q_f64(det->lam + 2);
+    const float64x2_t l2 = vld1q_f64(det->lam + 4);
+    const float64x2_t l3 = vld1q_f64(det->lam + 6);
+    const float64x2_t l4 = vld1q_f64(det->lam + 8);
+    const float64x2_t l5 = vld1q_f64(det->lam + 10);
+    const float64x2_t l6 = vld1q_f64(det->lam + 12);
+    const float64x2_t l7 = vld1q_f64(det->lam + 14);
+
+    float64x2_t r0 = vld1q_f64(det->acc + 0);
+    float64x2_t r1 = vld1q_f64(det->acc + 2);
+    float64x2_t r2 = vld1q_f64(det->acc + 4);
+    float64x2_t r3 = vld1q_f64(det->acc + 6);
+    float64x2_t r4 = vld1q_f64(det->acc + 8);
+    float64x2_t r5 = vld1q_f64(det->acc + 10);
+    float64x2_t r6 = vld1q_f64(det->acc + 12);
+    float64x2_t r7 = vld1q_f64(det->acc + 14);
+
+    const float64x2_t vone = vdupq_n_f64(1.0);
+    const float64x2_t vzero = vdupq_n_f64(0.0);
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+#define CS_BND_STEP_NEON(r, l)                                                \
+    do {                                                                      \
+        float64x2_t e_ = vfmaq_f64(vone, (l), vd);                            \
+        (r) = vfmaq_f64(e_, (r), e_);                                         \
+    } while (0)
+
+    if (no_out) {
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            double z = (x < 0.0) ? 0.0 : ((x > 1.0) ? 1.0 : x);
+            float64x2_t vd = vdupq_n_f64(z - mu0);
+
+            CS_BND_STEP_NEON(r0, l0);
+            CS_BND_STEP_NEON(r1, l1);
+            CS_BND_STEP_NEON(r2, l2);
+            CS_BND_STEP_NEON(r3, l3);
+            CS_BND_STEP_NEON(r4, l4);
+            CS_BND_STEP_NEON(r5, l5);
+            CS_BND_STEP_NEON(r6, l6);
+            CS_BND_STEP_NEON(r7, l7);
+
+            sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+            CS_NEON_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+                }
+            }
+        }
+    } else {
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            double z = (x < 0.0) ? 0.0 : ((x > 1.0) ? 1.0 : x);
+            float64x2_t vd = vdupq_n_f64(z - mu0);
+
+            CS_BND_STEP_NEON(r0, l0);
+            CS_BND_STEP_NEON(r1, l1);
+            CS_BND_STEP_NEON(r2, l2);
+            CS_BND_STEP_NEON(r3, l3);
+            CS_BND_STEP_NEON(r4, l4);
+            CS_BND_STEP_NEON(r5, l5);
+            CS_BND_STEP_NEON(r6, l6);
+            CS_BND_STEP_NEON(r7, l7);
+
+            sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+            CS_NEON_CLAMP_LAZY(sum);
+            double stat = sum * (1.0 / 16.0);
+            alarmed = (stat >= thr);
+            if (out_stats) out_stats[t] = stat;
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+                }
+            }
+        }
+    }
+#undef CS_BND_STEP_NEON
+
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_bounded_16(det->lam, mu0, xs[n - 1U], e_last);
+        double esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_bounded_16(det->lam, mu0, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_symmetry_2s_esr_neon(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double d_clamp = det->d_clamp;
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const bool auto_reset = det->cfg.auto_reset;
+    const bool no_out = (!out_stats && !out_alarms);
+
+    const float64x2_t l0 = vld1q_f64(det->lam + 0);
+    const float64x2_t l1 = vld1q_f64(det->lam + 2);
+    const float64x2_t l2 = vld1q_f64(det->lam + 4);
+    const float64x2_t l3 = vld1q_f64(det->lam + 6);
+
+    float64x2_t r0 = vld1q_f64(det->acc + 0);
+    float64x2_t r1 = vld1q_f64(det->acc + 2);
+    float64x2_t r2 = vld1q_f64(det->acc + 4);
+    float64x2_t r3 = vld1q_f64(det->acc + 6);
+    float64x2_t r4 = vld1q_f64(det->acc + 8);
+    float64x2_t r5 = vld1q_f64(det->acc + 10);
+    float64x2_t r6 = vld1q_f64(det->acc + 12);
+    float64x2_t r7 = vld1q_f64(det->acc + 14);
+
+    const float64x2_t vone = vdupq_n_f64(1.0);
+    const float64x2_t vzero = vdupq_n_f64(0.0);
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+#define CS_SYM_2S_STEP_NEON(rp, rn, lk)                                       \
+    do {                                                                      \
+        float64x2_t u_ = vmulq_f64((lk), vdx);                                \
+        float64x2_t q_ = vdivq_f64(u_, vaddq_f64(vone, vabsq_f64(u_)));       \
+        float64x2_t ep_ = vaddq_f64(vone, q_);                                \
+        float64x2_t en_ = vsubq_f64(vone, q_);                                \
+        (rp) = vfmaq_f64(ep_, (rp), ep_);                                     \
+        (rn) = vfmaq_f64(en_, (rn), en_);                                     \
+    } while (0)
+
+    if (no_out) {
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            float64x2_t vdx = vdupq_n_f64(cs_clamp_diff(x, mu0, d_clamp));
+            CS_SYM_2S_STEP_NEON(r0, r4, l0);
+            CS_SYM_2S_STEP_NEON(r1, r5, l1);
+            CS_SYM_2S_STEP_NEON(r2, r6, l2);
+            CS_SYM_2S_STEP_NEON(r3, r7, l3);
+
+            sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+            CS_NEON_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+                }
+            }
+        }
+    } else {
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            float64x2_t vdx = vdupq_n_f64(cs_clamp_diff(x, mu0, d_clamp));
+            CS_SYM_2S_STEP_NEON(r0, r4, l0);
+            CS_SYM_2S_STEP_NEON(r1, r5, l1);
+            CS_SYM_2S_STEP_NEON(r2, r6, l2);
+            CS_SYM_2S_STEP_NEON(r3, r7, l3);
+
+            sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+            CS_NEON_CLAMP_LAZY(sum);
+            double stat = sum * (1.0 / 16.0);
+            alarmed = (stat >= thr);
+            if (out_stats) out_stats[t] = stat;
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+                }
+            }
+        }
+    }
+#undef CS_SYM_2S_STEP_NEON
+
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_symmetry_16(det->lam, mu0, d_clamp, xs[n - 1U], e_last);
+        double esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_symmetry_16(det->lam, mu0, d_clamp, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_symmetry_1s_esr_neon(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double d_clamp = det->d_clamp;
+    const double thr = det->cfg.threshold;
+    const bool auto_reset = det->cfg.auto_reset;
+
+    const float64x2_t l0 = vld1q_f64(det->lam + 0);
+    const float64x2_t l1 = vld1q_f64(det->lam + 2);
+    const float64x2_t l2 = vld1q_f64(det->lam + 4);
+    const float64x2_t l3 = vld1q_f64(det->lam + 6);
+    const float64x2_t l4 = vld1q_f64(det->lam + 8);
+    const float64x2_t l5 = vld1q_f64(det->lam + 10);
+    const float64x2_t l6 = vld1q_f64(det->lam + 12);
+    const float64x2_t l7 = vld1q_f64(det->lam + 14);
+
+    float64x2_t r0 = vld1q_f64(det->acc + 0);
+    float64x2_t r1 = vld1q_f64(det->acc + 2);
+    float64x2_t r2 = vld1q_f64(det->acc + 4);
+    float64x2_t r3 = vld1q_f64(det->acc + 6);
+    float64x2_t r4 = vld1q_f64(det->acc + 8);
+    float64x2_t r5 = vld1q_f64(det->acc + 10);
+    float64x2_t r6 = vld1q_f64(det->acc + 12);
+    float64x2_t r7 = vld1q_f64(det->acc + 14);
+
+    const float64x2_t vone = vdupq_n_f64(1.0);
+    const float64x2_t vzero = vdupq_n_f64(0.0);
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+#define CS_SYM_1S_STEP_NEON(r, lk)                                            \
+    do {                                                                      \
+        float64x2_t u_ = vmulq_f64((lk), vdx);                                \
+        float64x2_t e_ = vaddq_f64(vone, vdivq_f64(u_, vaddq_f64(vone, vabsq_f64(u_)))); \
+        (r) = vfmaq_f64(e_, (r), e_);                                         \
+    } while (0)
+
+    for (; t < n; ++t) {
+        double x = xs[t];
+        if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+        float64x2_t vdx = vdupq_n_f64(cs_clamp_diff(x, mu0, d_clamp));
+        CS_SYM_1S_STEP_NEON(r0, l0);
+        CS_SYM_1S_STEP_NEON(r1, l1);
+        CS_SYM_1S_STEP_NEON(r2, l2);
+        CS_SYM_1S_STEP_NEON(r3, l3);
+        CS_SYM_1S_STEP_NEON(r4, l4);
+        CS_SYM_1S_STEP_NEON(r5, l5);
+        CS_SYM_1S_STEP_NEON(r6, l6);
+        CS_SYM_1S_STEP_NEON(r7, l7);
+
+        sum = cs_neon_sum16(r0, r1, r2, r3, r4, r5, r6, r7);
+        CS_NEON_CLAMP_LAZY(sum);
+        double stat = sum * (1.0 / 16.0);
+        alarmed = (stat >= thr);
+        if (out_stats) out_stats[t] = stat;
+        if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+        if (CS_UNLIKELY(alarmed)) {
+            alarms++;
+            if (auto_reset) {
+                r0 = r1 = r2 = r3 = r4 = r5 = r6 = r7 = vzero;
+            }
+        }
+    }
+#undef CS_SYM_1S_STEP_NEON
+#undef CS_NEON_CLAMP_LAZY
+
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_symmetry_16(det->lam, mu0, d_clamp, xs[n - 1U], e_last);
+        double esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    vst1q_f64(det->acc + 0, r0);
+    vst1q_f64(det->acc + 2, r1);
+    vst1q_f64(det->acc + 4, r2);
+    vst1q_f64(det->acc + 6, r3);
+    vst1q_f64(det->acc + 8, r4);
+    vst1q_f64(det->acc + 10, r5);
+    vst1q_f64(det->acc + 12, r6);
+    vst1q_f64(det->acc + 14, r7);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_symmetry_16(det->lam, mu0, d_clamp, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+/* Spill-free Vovk Rank E-SR NEON batch: keeps acc/lam in L1 (2 cache lines), never spills 16 regs across B-tree */
+static cs_status_t cs_edet_batch_vovk_rank_esr_neon(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const uint32_t max_prefix = det->cfg.max_prefix;
+    const bool auto_reset = det->cfg.auto_reset;
+    double * CS_RESTRICT acc = det->acc;
+    const double * CS_RESTRICT lam = det->lam;
+
+    double lam_mean = 0.0;
+    for (size_t m = 0; m < CS_EDET_LANES; ++m) lam_mean += lam[m];
+    lam_mean *= (1.0 / 16.0);
+
+    double sum = det->cur_stat * 16.0;
+    double last_p = det->last_p_value;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    cs_status_t err = CS_OK;
+    size_t t = 0U;
+
+    for (; t < n; ++t) {
+        double x = xs[t];
+        if (CS_UNLIKELY(!isfinite(x))) {
+            err = CS_ERR_NONFINITE;
+            break;
+        }
+        if (CS_UNLIKELY(det->btree.total_count >= max_prefix)) {
+            cs_btree_clear(&det->btree);
+            det->epoch_count++;
+        }
+        uint32_t less = 0U, equal = 0U;
+        cs_status_t st = cs_btree_rank_and_insert(&det->btree, x, &less, &equal);
+        if (CS_UNLIKELY(st != CS_OK)) {
+            err = st;
+            break;
+        }
+        double u = cs_rng_uniform01(&det->rng);
+        double p_val = ((double)less + u * (1.0 + (double)equal)) / (double)det->btree.total_count;
+        last_p = p_val;
+
+        const float64x2_t vone = vdupq_n_f64(1.0);
+        const float64x2_t vs = vdupq_n_f64(1.0 - 2.0 * p_val);
+        float64x2_t s0 = vdupq_n_f64(0.0);
+        float64x2_t s1 = vdupq_n_f64(0.0);
+        for (size_t i = 0; i < 16U; i += 4U) {
+            float64x2_t e0 = vfmaq_f64(vone, vld1q_f64(lam + i), vs);
+            float64x2_t e1 = vfmaq_f64(vone, vld1q_f64(lam + i + 2U), vs);
+            float64x2_t r0 = vfmaq_f64(e0, vld1q_f64(acc + i), e0);
+            float64x2_t r1 = vfmaq_f64(e1, vld1q_f64(acc + i + 2U), e1);
+            vst1q_f64(acc + i, r0);
+            vst1q_f64(acc + i + 2U, r1);
+            s0 = vaddq_f64(s0, r0);
+            s1 = vaddq_f64(s1, r1);
+        }
+        sum = vaddvq_f64(vaddq_f64(s0, s1));
+        if (CS_UNLIKELY(sum > CS_ACC_CAP)) {
+            const float64x2_t vcap = vdupq_n_f64(CS_ACC_CAP);
+            float64x2_t cs = vdupq_n_f64(0.0);
+            for (size_t i = 0; i < 16U; i += 2U) {
+                float64x2_t rc = vminq_f64(vld1q_f64(acc + i), vcap);
+                vst1q_f64(acc + i, rc);
+                cs = vaddq_f64(cs, rc);
+            }
+            sum = vaddvq_f64(cs);
+        }
+
+        alarmed = (sum >= thr16);
+        if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+        if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+        if (CS_UNLIKELY(alarmed)) {
+            alarms++;
+            if (auto_reset) {
+                memset(acc, 0, sizeof(det->acc));
+                cs_btree_clear(&det->btree);
+            }
+        }
+    }
+
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (CS_UNLIKELY(err != CS_OK)) {
+        if (t > 0U) {
+            det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+            det->last_e_mean = (alarmed && auto_reset) ? 1.0 : (1.0 + lam_mean * (1.0 - 2.0 * last_p));
+            det->last_p_value = (alarmed && auto_reset) ? NAN : last_p;
+        }
+        return err;
+    }
+
+    {
+        double last_e_mean = 1.0 + lam_mean * (1.0 - 2.0 * last_p);
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), last_e_mean, last_p, alarmed, last_out);
     }
     return CS_OK;
 }
-#endif /* CS_SIMD_NEON */
+
+/* =========================================================================
+ * Register-Resident x86_64 AVX2 Hot Batch Kernels (Catoni, Bounded, Sym, Rank)
+ * ========================================================================= */
+#elif defined(CS_SIMD_AVX2)
+
+static inline double cs_avx2_sum16(__m256d r0, __m256d r1, __m256d r2, __m256d r3) {
+    __m256d s = _mm256_add_pd(_mm256_add_pd(r0, r1), _mm256_add_pd(r2, r3));
+    double tmp[4];
+    _mm256_storeu_pd(tmp, s);
+    return (tmp[0] + tmp[1]) + (tmp[2] + tmp[3]);
+}
+
+#define CS_AVX2_CLAMP_LAZY(sum_v)                                             \
+    do {                                                                      \
+        if (CS_UNLIKELY((sum_v) > CS_ACC_CAP)) {                              \
+            const __m256d vcap_ = _mm256_set1_pd(CS_ACC_CAP);                 \
+            r0 = _mm256_min_pd(r0, vcap_); r1 = _mm256_min_pd(r1, vcap_);     \
+            r2 = _mm256_min_pd(r2, vcap_); r3 = _mm256_min_pd(r3, vcap_);     \
+            (sum_v) = cs_avx2_sum16(r0, r1, r2, r3);                          \
+        }                                                                     \
+    } while (0)
+
+static cs_status_t cs_edet_batch_catoni_esr_avx2(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double d_clamp = det->d_clamp;
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const bool auto_reset = det->cfg.auto_reset;
+    const bool two_sided = (det->cfg.side == CS_SIDE_TWO_SIDED);
+
+    __m256d r0 = _mm256_loadu_pd(det->acc + 0);
+    __m256d r1 = _mm256_loadu_pd(det->acc + 4);
+    __m256d r2 = _mm256_loadu_pd(det->acc + 8);
+    __m256d r3 = _mm256_loadu_pd(det->acc + 12);
+
+    const __m256d vone = _mm256_set1_pd(1.0);
+    const __m256d vhalf = _mm256_set1_pd(0.5);
+    const __m256d vzero = _mm256_setzero_pd();
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+    if (two_sided) {
+        const __m256d l0 = _mm256_loadu_pd(det->lam + 0);
+        const __m256d l1 = _mm256_loadu_pd(det->lam + 4);
+        const __m256d d0 = _mm256_loadu_pd(det->inv_denom + 0);
+        const __m256d d1 = _mm256_loadu_pd(det->inv_denom + 4);
+
+#define CS_CATONI_MIRROR_AVX2(rp, rn, lk, dk)                                 \
+    do {                                                                      \
+        __m256d y_ = _mm256_mul_pd((lk), vabsdx);                             \
+        __m256d pos_ = cs_avx_fmadd(y_, cs_avx_fmadd(vhalf, y_, vone), vone); \
+        __m256d ep_ = _mm256_mul_pd(pos_, (dk));                              \
+        __m256d en_ = _mm256_div_pd((dk), pos_);                              \
+        __m256d el_ = _mm256_blendv_pd(en_, ep_, mpos);                       \
+        __m256d eh_ = _mm256_blendv_pd(ep_, en_, mpos);                       \
+        (rp) = cs_avx_fmadd((rp), el_, el_);                                  \
+        (rn) = cs_avx_fmadd((rn), eh_, eh_);                                  \
+    } while (0)
+
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            double dx = cs_clamp_diff(x, mu0, d_clamp);
+            __m256d vabsdx = _mm256_set1_pd(fabs(dx));
+            __m256d mpos = _mm256_cmp_pd(_mm256_set1_pd(dx), vzero, _CMP_GE_OQ);
+
+            CS_CATONI_MIRROR_AVX2(r0, r2, l0, d0);
+            CS_CATONI_MIRROR_AVX2(r1, r3, l1, d1);
+
+            sum = cs_avx2_sum16(r0, r1, r2, r3);
+            CS_AVX2_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = vzero;
+                }
+            }
+        }
+#undef CS_CATONI_MIRROR_AVX2
+    } else {
+        const __m256d l0 = _mm256_loadu_pd(det->lam + 0);
+        const __m256d l1 = _mm256_loadu_pd(det->lam + 4);
+        const __m256d l2 = _mm256_loadu_pd(det->lam + 8);
+        const __m256d l3 = _mm256_loadu_pd(det->lam + 12);
+        const __m256d d0 = _mm256_loadu_pd(det->inv_denom + 0);
+        const __m256d d1 = _mm256_loadu_pd(det->inv_denom + 4);
+        const __m256d d2 = _mm256_loadu_pd(det->inv_denom + 8);
+        const __m256d d3 = _mm256_loadu_pd(det->inv_denom + 12);
+
+#define CS_CATONI_GEN_AVX2(r, l, invd)                                        \
+    do {                                                                      \
+        __m256d y_ = _mm256_mul_pd((l), vdx);                                 \
+        __m256d t_ = cs_avx_fmadd(vhalf, _mm256_mul_pd(y_, y_), vone);        \
+        __m256d ep_ = _mm256_mul_pd(_mm256_add_pd(t_, y_), (invd));           \
+        __m256d en_ = _mm256_div_pd((invd), _mm256_sub_pd(t_, y_));           \
+        __m256d e_ = _mm256_blendv_pd(en_, ep_, _mm256_cmp_pd(y_, vzero, _CMP_GE_OQ)); \
+        (r) = cs_avx_fmadd((r), e_, e_);                                      \
+    } while (0)
+
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            __m256d vdx = _mm256_set1_pd(cs_clamp_diff(x, mu0, d_clamp));
+            CS_CATONI_GEN_AVX2(r0, l0, d0);
+            CS_CATONI_GEN_AVX2(r1, l1, d1);
+            CS_CATONI_GEN_AVX2(r2, l2, d2);
+            CS_CATONI_GEN_AVX2(r3, l3, d3);
+
+            sum = cs_avx2_sum16(r0, r1, r2, r3);
+            CS_AVX2_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = vzero;
+                }
+            }
+        }
+#undef CS_CATONI_GEN_AVX2
+    }
+
+    _mm256_storeu_pd(det->acc + 0, r0);
+    _mm256_storeu_pd(det->acc + 4, r1);
+    _mm256_storeu_pd(det->acc + 8, r2);
+    _mm256_storeu_pd(det->acc + 12, r3);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[n - 1U], e_last);
+        double esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    _mm256_storeu_pd(det->acc + 0, r0);
+    _mm256_storeu_pd(det->acc + 4, r1);
+    _mm256_storeu_pd(det->acc + 8, r2);
+    _mm256_storeu_pd(det->acc + 12, r3);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_catoni_16(det->lam, det->inv_denom, mu0, d_clamp, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_bounded_esr_avx2(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const bool auto_reset = det->cfg.auto_reset;
+
+    const __m256d l0 = _mm256_loadu_pd(det->lam + 0);
+    const __m256d l1 = _mm256_loadu_pd(det->lam + 4);
+    const __m256d l2 = _mm256_loadu_pd(det->lam + 8);
+    const __m256d l3 = _mm256_loadu_pd(det->lam + 12);
+
+    __m256d r0 = _mm256_loadu_pd(det->acc + 0);
+    __m256d r1 = _mm256_loadu_pd(det->acc + 4);
+    __m256d r2 = _mm256_loadu_pd(det->acc + 8);
+    __m256d r3 = _mm256_loadu_pd(det->acc + 12);
+
+    const __m256d vone = _mm256_set1_pd(1.0);
+    const __m256d vzero = _mm256_setzero_pd();
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+#define CS_BND_STEP_AVX2(r, l)                                                \
+    do {                                                                      \
+        __m256d e_ = cs_avx_fmadd((l), vd, vone);                             \
+        (r) = cs_avx_fmadd((r), e_, e_);                                      \
+    } while (0)
+
+    for (; t < n; ++t) {
+        double x = xs[t];
+        if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+        double z = (x < 0.0) ? 0.0 : ((x > 1.0) ? 1.0 : x);
+        __m256d vd = _mm256_set1_pd(z - mu0);
+
+        CS_BND_STEP_AVX2(r0, l0);
+        CS_BND_STEP_AVX2(r1, l1);
+        CS_BND_STEP_AVX2(r2, l2);
+        CS_BND_STEP_AVX2(r3, l3);
+
+        sum = cs_avx2_sum16(r0, r1, r2, r3);
+        CS_AVX2_CLAMP_LAZY(sum);
+        alarmed = (sum >= thr16);
+        if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+        if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+        if (CS_UNLIKELY(alarmed)) {
+            alarms++;
+            if (auto_reset) {
+                r0 = r1 = r2 = r3 = vzero;
+            }
+        }
+    }
+#undef CS_BND_STEP_AVX2
+
+    _mm256_storeu_pd(det->acc + 0, r0);
+    _mm256_storeu_pd(det->acc + 4, r1);
+    _mm256_storeu_pd(det->acc + 8, r2);
+    _mm256_storeu_pd(det->acc + 12, r3);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_bounded_16(det->lam, mu0, xs[n - 1U], e_last);
+        double esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    _mm256_storeu_pd(det->acc + 0, r0);
+    _mm256_storeu_pd(det->acc + 4, r1);
+    _mm256_storeu_pd(det->acc + 8, r2);
+    _mm256_storeu_pd(det->acc + 12, r3);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_bounded_16(det->lam, mu0, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_symmetry_esr_avx2(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double mu0 = det->cfg.mu0;
+    const double d_clamp = det->d_clamp;
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const bool auto_reset = det->cfg.auto_reset;
+    const bool two_sided = (det->cfg.side == CS_SIDE_TWO_SIDED);
+
+    __m256d r0 = _mm256_loadu_pd(det->acc + 0);
+    __m256d r1 = _mm256_loadu_pd(det->acc + 4);
+    __m256d r2 = _mm256_loadu_pd(det->acc + 8);
+    __m256d r3 = _mm256_loadu_pd(det->acc + 12);
+
+    const __m256d vone = _mm256_set1_pd(1.0);
+    const __m256d vzero = _mm256_setzero_pd();
+    const __m256d sign_mask = _mm256_set1_pd(-0.0);
+
+    double sum = det->cur_stat * 16.0;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    size_t t = 0U;
+
+    if (two_sided) {
+        const __m256d l0 = _mm256_loadu_pd(det->lam + 0);
+        const __m256d l1 = _mm256_loadu_pd(det->lam + 4);
+
+#define CS_SYM_MIRROR_AVX2(rp, rn, lk)                                        \
+    do {                                                                      \
+        __m256d u_ = _mm256_mul_pd((lk), vdx);                                \
+        __m256d au_ = _mm256_andnot_pd(sign_mask, u_);                        \
+        __m256d q_ = _mm256_div_pd(u_, _mm256_add_pd(vone, au_));             \
+        __m256d ep_ = _mm256_add_pd(vone, q_);                                \
+        __m256d en_ = _mm256_sub_pd(vone, q_);                                \
+        (rp) = cs_avx_fmadd((rp), ep_, ep_);                                  \
+        (rn) = cs_avx_fmadd((rn), en_, en_);                                  \
+    } while (0)
+
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            __m256d vdx = _mm256_set1_pd(cs_clamp_diff(x, mu0, d_clamp));
+            CS_SYM_MIRROR_AVX2(r0, r2, l0);
+            CS_SYM_MIRROR_AVX2(r1, r3, l1);
+
+            sum = cs_avx2_sum16(r0, r1, r2, r3);
+            CS_AVX2_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = vzero;
+                }
+            }
+        }
+#undef CS_SYM_MIRROR_AVX2
+    } else {
+        const __m256d l0 = _mm256_loadu_pd(det->lam + 0);
+        const __m256d l1 = _mm256_loadu_pd(det->lam + 4);
+        const __m256d l2 = _mm256_loadu_pd(det->lam + 8);
+        const __m256d l3 = _mm256_loadu_pd(det->lam + 12);
+
+#define CS_SYM_GEN_AVX2(r, lk)                                                \
+    do {                                                                      \
+        __m256d u_ = _mm256_mul_pd((lk), vdx);                                \
+        __m256d au_ = _mm256_andnot_pd(sign_mask, u_);                        \
+        __m256d e_ = _mm256_add_pd(vone, _mm256_div_pd(u_, _mm256_add_pd(vone, au_))); \
+        (r) = cs_avx_fmadd((r), e_, e_);                                      \
+    } while (0)
+
+        for (; t < n; ++t) {
+            double x = xs[t];
+            if (CS_UNLIKELY(!isfinite(x))) goto err_nonfinite;
+            __m256d vdx = _mm256_set1_pd(cs_clamp_diff(x, mu0, d_clamp));
+            CS_SYM_GEN_AVX2(r0, l0);
+            CS_SYM_GEN_AVX2(r1, l1);
+            CS_SYM_GEN_AVX2(r2, l2);
+            CS_SYM_GEN_AVX2(r3, l3);
+
+            sum = cs_avx2_sum16(r0, r1, r2, r3);
+            CS_AVX2_CLAMP_LAZY(sum);
+            alarmed = (sum >= thr16);
+            if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+            if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+            if (CS_UNLIKELY(alarmed)) {
+                alarms++;
+                if (auto_reset) {
+                    r0 = r1 = r2 = r3 = vzero;
+                }
+            }
+        }
+#undef CS_SYM_GEN_AVX2
+    }
+#undef CS_AVX2_CLAMP_LAZY
+
+    _mm256_storeu_pd(det->acc + 0, r0);
+    _mm256_storeu_pd(det->acc + 4, r1);
+    _mm256_storeu_pd(det->acc + 8, r2);
+    _mm256_storeu_pd(det->acc + 12, r3);
+    det->step_count += n;
+    det->alarm_count = alarms;
+
+    {
+        double e_last[CS_EDET_LANES];
+        cs_eval_symmetry_16(det->lam, mu0, d_clamp, xs[n - 1U], e_last);
+        double esum = 0.0;
+        for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_last[m];
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), esum * (1.0 / 16.0), NAN, alarmed, last_out);
+    }
+    return CS_OK;
+
+err_nonfinite:
+    _mm256_storeu_pd(det->acc + 0, r0);
+    _mm256_storeu_pd(det->acc + 4, r1);
+    _mm256_storeu_pd(det->acc + 8, r2);
+    _mm256_storeu_pd(det->acc + 12, r3);
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (t > 0U) {
+        det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+        if (alarmed && auto_reset) {
+            det->last_e_mean = 1.0;
+        } else {
+            double e_prev[CS_EDET_LANES];
+            cs_eval_symmetry_16(det->lam, mu0, d_clamp, xs[t - 1U], e_prev);
+            double esum = 0.0;
+            for (size_t m = 0; m < CS_EDET_LANES; ++m) esum += e_prev[m];
+            det->last_e_mean = esum * (1.0 / 16.0);
+        }
+    }
+    return CS_ERR_NONFINITE;
+}
+
+static cs_status_t cs_edet_batch_vovk_rank_esr_avx2(
+    cs_edetector_t *det,
+    const double * CS_RESTRICT xs,
+    size_t n,
+    double * CS_RESTRICT out_stats,
+    uint8_t * CS_RESTRICT out_alarms,
+    cs_edet_result_t *last_out)
+{
+    const double thr = det->cfg.threshold;
+    const double thr16 = (thr < DBL_MAX * (1.0 / 16.0)) ? (thr * 16.0) : DBL_MAX;
+    const uint32_t max_prefix = det->cfg.max_prefix;
+    const bool auto_reset = det->cfg.auto_reset;
+    double * CS_RESTRICT acc = det->acc;
+    const double * CS_RESTRICT lam = det->lam;
+
+    double lam_mean = 0.0;
+    for (size_t m = 0; m < CS_EDET_LANES; ++m) lam_mean += lam[m];
+    lam_mean *= (1.0 / 16.0);
+
+    double sum = det->cur_stat * 16.0;
+    double last_p = det->last_p_value;
+    bool alarmed = false;
+    uint64_t alarms = det->alarm_count;
+    cs_status_t err = CS_OK;
+    size_t t = 0U;
+
+    for (; t < n; ++t) {
+        double x = xs[t];
+        if (CS_UNLIKELY(!isfinite(x))) {
+            err = CS_ERR_NONFINITE;
+            break;
+        }
+        if (CS_UNLIKELY(det->btree.total_count >= max_prefix)) {
+            cs_btree_clear(&det->btree);
+            det->epoch_count++;
+        }
+        uint32_t less = 0U, equal = 0U;
+        cs_status_t st = cs_btree_rank_and_insert(&det->btree, x, &less, &equal);
+        if (CS_UNLIKELY(st != CS_OK)) {
+            err = st;
+            break;
+        }
+        double u = cs_rng_uniform01(&det->rng);
+        double p_val = ((double)less + u * (1.0 + (double)equal)) / (double)det->btree.total_count;
+        last_p = p_val;
+
+        const __m256d vone = _mm256_set1_pd(1.0);
+        const __m256d vs = _mm256_set1_pd(1.0 - 2.0 * p_val);
+        __m256d rsum = _mm256_setzero_pd();
+        for (size_t i = 0; i < 16U; i += 4U) {
+            __m256d e = cs_avx_fmadd(_mm256_loadu_pd(lam + i), vs, vone);
+            __m256d r = cs_avx_fmadd(_mm256_loadu_pd(acc + i), e, e);
+            _mm256_storeu_pd(acc + i, r);
+            rsum = _mm256_add_pd(rsum, r);
+        }
+        double tmp[4];
+        _mm256_storeu_pd(tmp, rsum);
+        sum = (tmp[0] + tmp[1]) + (tmp[2] + tmp[3]);
+        if (CS_UNLIKELY(sum > CS_ACC_CAP)) {
+            const __m256d vcap = _mm256_set1_pd(CS_ACC_CAP);
+            __m256d cs = _mm256_setzero_pd();
+            for (size_t i = 0; i < 16U; i += 4U) {
+                __m256d rc = _mm256_min_pd(_mm256_loadu_pd(acc + i), vcap);
+                _mm256_storeu_pd(acc + i, rc);
+                cs = _mm256_add_pd(cs, rc);
+            }
+            _mm256_storeu_pd(tmp, cs);
+            sum = (tmp[0] + tmp[1]) + (tmp[2] + tmp[3]);
+        }
+
+        alarmed = (sum >= thr16);
+        if (out_stats) out_stats[t] = sum * (1.0 / 16.0);
+        if (out_alarms) out_alarms[t] = alarmed ? 1U : 0U;
+        if (CS_UNLIKELY(alarmed)) {
+            alarms++;
+            if (auto_reset) {
+                memset(acc, 0, sizeof(det->acc));
+                cs_btree_clear(&det->btree);
+            }
+        }
+    }
+
+    det->step_count += t;
+    det->alarm_count = alarms;
+    if (CS_UNLIKELY(err != CS_OK)) {
+        if (t > 0U) {
+            det->cur_stat = (alarmed && auto_reset) ? 0.0 : (sum * (1.0 / 16.0));
+            det->last_e_mean = (alarmed && auto_reset) ? 1.0 : (1.0 + lam_mean * (1.0 - 2.0 * last_p));
+            det->last_p_value = (alarmed && auto_reset) ? NAN : last_p;
+        }
+        return err;
+    }
+
+    {
+        double last_e_mean = 1.0 + lam_mean * (1.0 - 2.0 * last_p);
+        cs_edet_finalize_batch(det, sum * (1.0 / 16.0), last_e_mean, last_p, alarmed, last_out);
+    }
+    return CS_OK;
+}
+#endif /* CS_SIMD_NEON / CS_SIMD_AVX2 */
 
 cs_status_t cs_edet_step_batch(
     cs_edetector_t *det,
@@ -864,11 +2196,39 @@ cs_status_t cs_edet_step_batch(
         return CS_OK;
     }
 
+    if (det->cfg.accum == CS_ACCUM_ESR) {
 #if defined(CS_SIMD_NEON)
-    if (det->eff_family == CS_FAMILY_CATONI && det->cfg.accum == CS_ACCUM_ESR) {
-        return cs_edet_batch_catoni_esr_neon(det, xs, n, out_stats, out_alarms, last_out);
-    }
+        switch (det->eff_family) {
+            case CS_FAMILY_CATONI:
+                return (det->cfg.side == CS_SIDE_TWO_SIDED)
+                    ? cs_edet_batch_catoni_2s_esr_neon(det, xs, n, out_stats, out_alarms, last_out)
+                    : cs_edet_batch_catoni_1s_esr_neon(det, xs, n, out_stats, out_alarms, last_out);
+            case CS_FAMILY_BOUNDED:
+                return cs_edet_batch_bounded_esr_neon(det, xs, n, out_stats, out_alarms, last_out);
+            case CS_FAMILY_SYMMETRY:
+                return (det->cfg.side == CS_SIDE_TWO_SIDED)
+                    ? cs_edet_batch_symmetry_2s_esr_neon(det, xs, n, out_stats, out_alarms, last_out)
+                    : cs_edet_batch_symmetry_1s_esr_neon(det, xs, n, out_stats, out_alarms, last_out);
+            case CS_FAMILY_VOVK_RANK:
+                return cs_edet_batch_vovk_rank_esr_neon(det, xs, n, out_stats, out_alarms, last_out);
+            default:
+                break;
+        }
+#elif defined(CS_SIMD_AVX2)
+        switch (det->eff_family) {
+            case CS_FAMILY_CATONI:
+                return cs_edet_batch_catoni_esr_avx2(det, xs, n, out_stats, out_alarms, last_out);
+            case CS_FAMILY_BOUNDED:
+                return cs_edet_batch_bounded_esr_avx2(det, xs, n, out_stats, out_alarms, last_out);
+            case CS_FAMILY_SYMMETRY:
+                return cs_edet_batch_symmetry_esr_avx2(det, xs, n, out_stats, out_alarms, last_out);
+            case CS_FAMILY_VOVK_RANK:
+                return cs_edet_batch_vovk_rank_esr_avx2(det, xs, n, out_stats, out_alarms, last_out);
+            default:
+                break;
+        }
 #endif
+    }
 
     cs_edet_result_t res;
     memset(&res, 0, sizeof(res));

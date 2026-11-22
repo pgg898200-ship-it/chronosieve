@@ -116,7 +116,7 @@ static void test_btree_exact_order_stats(void) {
         CHECK(bt.nodes[bt.root].subtree_size == (uint32_t)(i + 1U));
     }
 
-    /* Test O(1) epoch clear & re-insert */
+    /* Test O(1) epoch clear & fused cs_btree_rank_and_insert exactness */
     cs_btree_clear(&bt);
     CHECK(bt.total_count == 0U);
     uint32_t l = 99, e = 99;
@@ -126,9 +126,36 @@ static void test_btree_exact_order_stats(void) {
     cs_btree_rank_query(&bt, 3.14, &l, &e);
     CHECK(l == 0U && e == 1U);
 
+    cs_btree_clear(&bt);
+    cs_rng_seed(&rng, 98765ULL);
+    for (size_t i = 0; i < N; ++i) {
+        double x;
+        if (i < 600U) {
+            x = (double)((int)(cs_rng_u64(&rng) % 19ULL) - 9);
+        } else if (i < 1200U) {
+            x = (double)i * 0.25;
+        } else if (i < 1800U) {
+            x = -(double)i * 0.25;
+        } else {
+            x = cs_rng_uniform01(&rng) * 200.0 - 100.0;
+        }
+        uint32_t brute_less = 0, brute_eq = 0;
+        for (size_t j = 0; j < i; ++j) {
+            if (seen[j] < x) brute_less++;
+            else if (seen[j] == x) brute_eq++;
+        }
+        uint32_t bt_less = 0, bt_eq = 0;
+        CHECK(cs_btree_rank_and_insert(&bt, x, &bt_less, &bt_eq) == CS_OK);
+        CHECK(bt_less == brute_less);
+        CHECK(bt_eq == brute_eq);
+        seen[i] = x;
+        CHECK(bt.total_count == (uint32_t)(i + 1U));
+        CHECK(bt.nodes[bt.root].subtree_size == (uint32_t)(i + 1U));
+    }
+
     cs_btree_free(&bt);
     free(seen);
-    printf("[PASS] btree_exact_order_stats (N=%zu)\n", N);
+    printf("[PASS] btree_exact_order_stats (N=%zu, separate+fused)\n", N);
 }
 
 static void test_edetectors_and_efusion(void) {
@@ -347,6 +374,47 @@ static void test_conformal_and_coma(void) {
         CHECK(cs_coma_merge(lo, hi, NULL, 3U, 0.5, true, &rstate, ivs, 3U, &cres) == CS_OK);
         CHECK(cres.used_tau >= 0.5 && cres.used_tau < 1.0);
     }
+    {
+        /* cs_coma_merge_batch: empty batch, shared weights, per-step weights, and K=80 heap fallback */
+        CHECK(cs_coma_merge_batch(NULL, NULL, NULL, false, 0U, 3U, 0.5, false, NULL, NULL, NULL, NULL, NULL, NULL) == CS_OK);
+
+        double lo_b[6] = {0.0, 0.0, 5.0,  0.0, 1.0, 1.0};
+        double hi_b[6] = {6.0, 1.0, 6.0,  1.0, 2.0, 2.0};
+        double w_b[6]  = {0.4, 0.3, 0.3,  0.5, 0.25, 0.25};
+        double hlo[2], hhi[2], agree[2];
+        uint32_t nivs[2];
+        cs_coma_result_t last_c;
+        CHECK(cs_coma_merge_batch(lo_b, hi_b, w_b, true, 2U, 3U, 0.5, false, NULL, hlo, hhi, agree, nivs, &last_c) == CS_OK);
+        CHECK(nivs[0] == 2U && fabs(hlo[0] - 0.0) < 1e-12 && fabs(hhi[0] - 6.0) < 1e-12 && fabs(agree[0] - 0.7) < 1e-12);
+        /* Strict COMA (> tau=0.5): on [0,1) w=0.5, at x=1 w=1.0 > 0.5, on (1,2] w=0.5 => exact singleton [1.0, 1.0] */
+        CHECK(nivs[1] == 1U && fabs(hlo[1] - 1.0) < 1e-12 && fabs(hhi[1] - 1.0) < 1e-12 && fabs(agree[1] - 1.0) < 1e-12);
+        CHECK(last_c.n_intervals == 1U && fabs(last_c.hull_lo - 1.0) < 1e-12 && fabs(last_c.hull_hi - 1.0) < 1e-12);
+
+        /* K = 80 (> 64 stack limit -> exercises heap path cleanly under ASan) */
+        double lo80[160], hi80[160], w80[80];
+        for (size_t k = 0; k < 80U; ++k) {
+            lo80[k] = 1.0 + 0.01 * (double)k;
+            hi80[k] = 5.0 + 0.01 * (double)k;
+            lo80[80U + k] = -2.0;
+            hi80[80U + k] = 2.0;
+            w80[k] = 1.0;
+        }
+        CHECK(cs_coma_merge_batch(lo80, hi80, w80, false, 2U, 80U, 0.5, false, NULL, hlo, hhi, agree, nivs, NULL) == CS_OK);
+        CHECK(nivs[0] == 1U && fabs(agree[0] - 1.0) < 1e-12);
+        CHECK(nivs[1] == 1U && fabs(hlo[1] - (-2.0)) < 1e-12 && fabs(hhi[1] - 2.0) < 1e-12);
+
+        /* Overflow/underflow-safe scale-invariant COMA weight normalization */
+        double lo2[2] = {0.0, 0.0};
+        double hi2[2] = {1.0, 1.0};
+        double w_huge[2] = {1.0e308, 1.0e308};
+        double w_tiny[2] = {1.0e-320, 1.0e-320};
+        cs_interval_t iv2[2];
+        cs_coma_result_t c2;
+        CHECK(cs_coma_merge(lo2, hi2, w_huge, 2U, 0.5, false, NULL, iv2, 2U, &c2) == CS_OK);
+        CHECK(c2.n_intervals == 1U && fabs(c2.max_agreement - 1.0) < 1e-12);
+        CHECK(cs_coma_merge(lo2, hi2, w_tiny, 2U, 0.5, false, NULL, iv2, 2U, &c2) == CS_OK);
+        CHECK(c2.n_intervals == 1U && fabs(c2.max_agreement - 1.0) < 1e-12);
+    }
 
     printf("[PASS] conformal_and_coma\n");
 }
@@ -381,6 +449,71 @@ static void test_fuser_and_digest(void) {
     CHECK(rflags[0] == 0U && rflags[1] == 0U);
     CHECK(fabs(fres.prediction - 1.0) < 0.2);
     cs_fuser_destroy(fus);
+
+    /* Peer-relative rogue attribution immunity to 86-sigma exogenous spikes across K=3..8,
+     * plus graceful raw-residual fallback when active_cnt < 3. */
+    for (size_t K = 3U; K <= 8U; ++K) {
+        cs_fuser_config_t pcfg;
+        cs_fuser_config_default(&pcfg, K);
+        CHECK(pcfg.peer_relative_rogue == true);
+        pcfg.rogue_mu0 = 0.25;
+        pcfg.rogue_sigma = 0.3;
+        pcfg.rogue_threshold = 200.0;
+        cs_fuser_t *pf = cs_fuser_create(&pcfg);
+        CHECK(pf != NULL);
+        double preds[8];
+        for (int t = 0; t < 120; ++t) {
+            double y_true = (t == 40 || t == 80) ? 95.5 : 10.0; /* 86-sigma common shock */
+            for (size_t k = 0; k < K; ++k) {
+                preds[k] = 10.0 + 0.05 * (double)((t + (int)k) % 3 - 1);
+            }
+            CHECK(cs_fuser_step(pf, preds, NULL, y_true, false, &fres) == CS_OK);
+        }
+        uint8_t pflags[8];
+        CHECK(cs_fuser_get_rogue_stats(pf, NULL, pflags, K) == CS_OK);
+        for (size_t k = 0; k < K; ++k) {
+            CHECK(pflags[k] == 0U); /* Zero false quarantines on exogenous spikes! */
+        }
+        cs_fuser_destroy(pf);
+    }
+    /* Raw-residual fallback when active_cnt == 2 (< 3) */
+    {
+        cs_fuser_config_t pcfg;
+        cs_fuser_config_default(&pcfg, 2U);
+        pcfg.rogue_mu0 = 0.25;
+        pcfg.rogue_sigma = 0.3;
+        pcfg.rogue_threshold = 50.0;
+        cs_fuser_t *pf = cs_fuser_create(&pcfg);
+        CHECK(pf != NULL);
+        for (int t = 0; t < 60; ++t) {
+            double preds[2] = {1.0, 5.0};
+            CHECK(cs_fuser_step(pf, preds, NULL, 1.0, false, &fres) == CS_OK);
+        }
+        uint8_t pflags[2];
+        CHECK(cs_fuser_get_rogue_stats(pf, NULL, pflags, 2U) == CS_OK);
+        CHECK(pflags[0] == 0U && pflags[1] == 1U);
+        cs_fuser_destroy(pf);
+    }
+    /* Symmetric peer-median calibration floor at minimum cal_window=16 protects accurate agent 0 */
+    {
+        cs_fuser_config_t pcfg;
+        cs_fuser_config_default(&pcfg, 4U);
+        pcfg.cal_window = 16U;
+        pcfg.rogue_threshold = 200.0;
+        pcfg.peer_relative_rogue = true;
+        cs_fuser_t *pf = cs_fuser_create(&pcfg);
+        CHECK(pf != NULL);
+        for (int t = 0; t < 160; ++t) {
+            double sgn = (t % 2 == 0) ? 1.0 : -1.0;
+            double p0 = (t == 90) ? 0.25 : (0.01 * sgn);
+            double preds[4] = {p0, 0.45 * sgn, -0.50 * sgn, 0.55 * sgn};
+            CHECK(cs_fuser_step(pf, preds, NULL, 0.0, false, &fres) == CS_OK);
+        }
+        uint8_t pflags[4];
+        CHECK(cs_fuser_get_rogue_stats(pf, NULL, pflags, 4U) == CS_OK);
+        CHECK(pflags[0] == 0U);
+        cs_fuser_destroy(pf);
+    }
 
     /* Swing PLA L_inf <= eps + verbatim anomalies + ring-buffer zoom() */
     cs_digest_config_t dcfg;
@@ -442,6 +575,55 @@ static void test_fuser_and_digest(void) {
     CHECK(strstr(md, "zoom(\"sensor_0\"") != NULL);
 
     cs_digest_destroy(dig);
+
+    /* Verify cs_digest_push_batch SIMD stationary fast path matches sequential cs_digest_push */
+    {
+        cs_digest_t *d_seq = cs_digest_create(&dcfg);
+        cs_digest_t *d_bat = cs_digest_create(&dcfg);
+        CHECK(d_seq != NULL && d_bat != NULL);
+        for (size_t i = 0; i < M; ++i) {
+            CHECK(cs_digest_push(d_seq, ts[i], ys[i], ys[i], 0.0, 0.0, 0U, NULL) == CS_OK);
+        }
+        CHECK(cs_digest_push_batch(d_bat, ts, ys, NULL, NULL, NULL, NULL, M, NULL, NULL) == CS_OK);
+        CHECK(cs_digest_segment_count(d_seq) == cs_digest_segment_count(d_bat));
+        double rec_seq[400], rec_bat[400];
+        CHECK(cs_digest_reconstruct(d_seq, ts, M, rec_seq) == CS_OK);
+        CHECK(cs_digest_reconstruct(d_bat, ts, M, rec_bat) == CS_OK);
+        for (size_t i = 0; i < M; ++i) {
+            CHECK(fabs(rec_bat[i] - ys[i]) <= dcfg.epsilon + 1.0e-12);
+            CHECK(fabs(rec_bat[i] - rec_seq[i]) <= 1.0e-12);
+        }
+        /* Verify lossless zoom on batch-pushed digest */
+        cs_ring_record_t zb[128];
+        size_t zbn = 0U;
+        bool zbt = true;
+        CHECK(cs_digest_zoom(d_bat, 295.0, 305.0, zb, 128U, &zbn, &zbt) == CS_OK);
+        CHECK(zbt == false && zbn == 11U);
+        for (size_t i = 0; i < zbn; ++i) {
+            CHECK(zb[i].y == ys[295U + i]);
+        }
+        cs_digest_destroy(d_seq);
+        cs_digest_destroy(d_bat);
+
+        /* Tiny dt=1e-290 + large eps=1e20 must match scalar (no +/-inf slope bypass in SIMD) */
+        cs_digest_config_t tcfg;
+        cs_digest_config_default(&tcfg);
+        tcfg.epsilon = 1.0e20;
+        cs_digest_t *td_seq = cs_digest_create(&tcfg);
+        cs_digest_t *td_bat = cs_digest_create(&tcfg);
+        CHECK(td_seq != NULL && td_bat != NULL);
+        double tts[4] = {0.0, 1.0e-290, 2.0e-290, 3.0e-290};
+        double tys[4] = {0.0, 0.0, 0.0, 0.0};
+        for (size_t i = 0; i < 4U; ++i) {
+            CHECK(cs_digest_push(td_seq, tts[i], tys[i], tys[i], 0.0, 0.0, 0U, NULL) == CS_OK);
+        }
+        CHECK(cs_digest_push_batch(td_bat, tts, tys, NULL, NULL, NULL, NULL, 4U, NULL, NULL) == CS_OK);
+        CHECK(cs_digest_segment_count(td_seq) == 4U);
+        CHECK(cs_digest_segment_count(td_bat) == cs_digest_segment_count(td_seq));
+        cs_digest_destroy(td_seq);
+        cs_digest_destroy(td_bat);
+    }
+
     printf("[PASS] fuser_and_digest\n");
 }
 

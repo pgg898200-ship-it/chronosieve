@@ -1,59 +1,73 @@
 {
   "throughput": {
+    "version": "0.2.0",
     "platform": "macOS-15.3.2-arm64-arm-64bit-Mach-O",
     "machine": "arm64",
     "python": "3.14.6",
     "simd_backend": "NEON",
+    "timing_method": "median_of_5",
     "n_batch": 1000000,
     "n_scalar": 100000,
     "kernels": {
+      "bounded_esr_batch_numpy": {
+        "ns_per_tick": 2.034375,
+        "m_ticks_per_sec": 491.55145929339477
+      },
       "catoni_esr_batch_numpy": {
-        "ns_per_tick": 9.03325,
-        "m_ticks_per_sec": 110.70212824841558
+        "ns_per_tick": 4.057042,
+        "m_ticks_per_sec": 246.48500064825555
+      },
+      "symmetry_esr_batch_numpy": {
+        "ns_per_tick": 4.626,
+        "m_ticks_per_sec": 216.16947686986597
       },
       "catoni_esr_batch_stdlib_array": {
-        "ns_per_tick": 8.469795,
-        "m_ticks_per_sec": 118.0666120018253
+        "ns_per_tick": 3.97729,
+        "m_ticks_per_sec": 251.4274795149461
       },
       "catoni_esr_cpython_scalar_step": {
-        "ns_per_tick": 347.81292,
-        "m_ticks_per_sec": 2.8751088372450337
+        "ns_per_tick": 331.72042,
+        "m_ticks_per_sec": 3.0145868017410566
       },
       "catoni_esr_pure_python_ref": {
-        "ns_per_tick": 936.5833,
-        "m_ticks_per_sec": 1.0677106884139402
+        "ns_per_tick": 947.86875,
+        "m_ticks_per_sec": 1.0549983845337236
       },
       "vovk_rank_btree_batch": {
-        "ns_per_tick": 115.48625,
-        "m_ticks_per_sec": 8.659039496043901
+        "ns_per_tick": 63.15167,
+        "m_ticks_per_sec": 15.834893994093902
       },
       "conformal_pid_soa_64ch_batch": {
-        "ns_per_ch_tick": 2.482792,
-        "m_ch_ticks_per_sec": 402.7723627271233
+        "ns_per_ch_tick": 1.483875,
+        "m_ch_ticks_per_sec": 673.9112121977929
       },
       "conformal_pid_ereset_1ch_batch": {
-        "ns_per_tick": 127.28916,
-        "m_ticks_per_sec": 7.856128518720683
+        "ns_per_tick": 115.03832,
+        "m_ticks_per_sec": 8.692755596569908
       },
       "conformal_pid_pure_python_ref": {
-        "ns_per_tick": 190.27085,
-        "m_ticks_per_sec": 5.255665804825069
+        "ns_per_tick": 167.1875,
+        "m_ticks_per_sec": 5.981308411214953
       },
       "sleeping_boa_k8_batch": {
-        "ns_per_step": 181.55958,
-        "m_steps_per_sec": 5.507833847159153
+        "ns_per_step": 113.78209,
+        "m_steps_per_sec": 8.7887294037225
+      },
+      "coma_merge_batch_k8_numpy": {
+        "ns_per_step": 138.00541,
+        "m_steps_per_sec": 7.24609274375548
       },
       "coma_merge_k8_python_call": {
-        "ns_per_call": 557.3725,
-        "m_calls_per_sec": 1.7941322903444286
+        "ns_per_call": 501.47916,
+        "m_calls_per_sec": 1.994100811686771
       },
       "swing_pla_ringbuf_batch": {
-        "ns_per_tick": 6.689708,
-        "m_ticks_per_sec": 149.48335562628444
+        "ns_per_tick": 2.472625,
+        "m_ticks_per_sec": 404.4284919872605
       }
     },
-    "native_cli_bytes": 103712,
-    "native_cli_bench_stdout": "ChronoSieve Native C11 Benchmark (N=2000000, SIMD=NEON)\n  Catoni E-SR (16-lane):        8.82 ns/tick  (  113.4 M ticks/s)  stat=630.605\n  Vovk Rank B-tree (65k cap): 114.42 ns/tick  (   8.74 M ticks/s)  stat=25748.667\n  Conformal PID SoA (C=64):     2.39 ns/ch-tk (  418.8 M ch-tk/s)\n  Sleeping BOA + Catoni (K=8):180.74 ns/step  (   5.53 M steps/s)  y_hat=0.101\n  Swing PLA + RingBuf:          6.17 ns/tick  (  162.0 M ticks/s)  segs=25337"
+    "native_cli_bytes": 120352,
+    "native_cli_bench_stdout": "ChronoSieve Native C11 Benchmark (N=2000000, SIMD=NEON)\n  Bounded E-SR (16-lane):       2.51 ns/tick  (  398.9 M ticks/s)  stat=3741.106\n  Catoni E-SR (16-lane):        4.58 ns/tick  (  218.6 M ticks/s)  stat=630.605\n  Symmetry E-SR (16-lane):      4.54 ns/tick  (  220.0 M ticks/s)  stat=31344.399\n  Vovk Rank B-tree (65k cap):  67.80 ns/tick  (  14.75 M ticks/s)  stat=25748.667\n  Conformal PID SoA (C=64):     1.94 ns/ch-tk (  515.3 M ch-tk/s)\n  Sleeping BOA + Catoni (K=8):115.30 ns/step  (   8.67 M steps/s)  y_hat=0.101\n  Online COMA Batch (K=8):    134.36 ns/step  (   7.44 M steps/s)  agree=1.00\n  Swing PLA + RingBuf:          2.12 ns/tick  (  470.7 M ticks/s)  segs=25337"
   },
   "math_proofs": {
     "gamma": 200.0,
@@ -141,14 +155,14 @@
           "first_alarm_year": 1905,
           "delay_years": 7,
           "pre_1899_false_alarms": 0,
-          "max_stat": 7894776.980841841
+          "max_stat": 7894776.98084184
         },
         "vovk_rank_gamma100": {
           "gamma": 100.0,
           "first_alarm_year": 1907,
           "delay_years": 9,
           "pre_1899_false_alarms": 0,
-          "max_stat": 7894776.980841841
+          "max_stat": 7894776.98084184
         },
         "calibrated_catoni_gamma100": {
           "gamma": 100.0,
@@ -158,7 +172,7 @@
           "first_alarm_year": 1907,
           "delay_years": 9,
           "pre_1899_false_alarms": 0,
-          "max_stat": 4895507498246437.0
+          "max_stat": 4895507498246442.0
         }
       },
       "sunspots_conformal_pid": {
@@ -180,6 +194,12 @@
   },
   "tokens": {
     "n_ticks": 10000,
+    "tiktoken_available": true,
+    "tiktoken_version": "0.14.0",
+    "tiktoken_encodings": [
+      "cl100k_base",
+      "o200k_base"
+    ],
     "true_anomalies": [
       1800,
       5200,
@@ -188,23 +208,31 @@
     "raw_json": {
       "chars": 221684,
       "chars_div_4": 55421,
-      "bpe_proxy_tokens": 163928
+      "bpe_proxy_tokens": 163928,
+      "tiktoken_o200k_base": 121906,
+      "tiktoken_cl100k_base": 117979
     },
     "raw_csv": {
       "chars": 122820,
       "chars_div_4": 30705,
-      "bpe_proxy_tokens": 53930
+      "bpe_proxy_tokens": 53930,
+      "tiktoken_o200k_base": 79002,
+      "tiktoken_cl100k_base": 79002
     },
     "tsln_style_delta": {
       "chars": 52846,
       "chars_div_4": 13211,
-      "bpe_proxy_tokens": 44530
+      "bpe_proxy_tokens": 44530,
+      "tiktoken_o200k_base": 36464,
+      "tiktoken_cl100k_base": 36464
     },
     "chronosieve_gated_burst2": {
       "wake_packets": 14,
       "chars": 11150,
       "chars_div_4": 2787,
       "bpe_proxy_tokens": 6000,
+      "tiktoken_o200k_base": 6310,
+      "tiktoken_cl100k_base": 6296,
       "avg_bpe_tokens_per_packet": 428.57142857142856,
       "avg_chars4_tokens_per_packet": 199.07142857142858,
       "reduction_vs_json_bpe_pct": 96.33985652237568,
@@ -214,13 +242,23 @@
       "reduction_vs_tsln_bpe_pct": 86.52593757017742,
       "reduction_vs_tsln_chars4_pct": 78.90394368329423,
       "injected_anomaly_recall_pinned": 1.0,
-      "injected_anomaly_recall_wake_packets": 0.0
+      "injected_anomaly_recall_wake_packets": 0.0,
+      "avg_o200k_base_tokens_per_packet": 450.7142857142857,
+      "reduction_vs_json_o200k_base_pct": 94.82388069496169,
+      "reduction_vs_csv_o200k_base_pct": 92.01286043391306,
+      "reduction_vs_tsln_o200k_base_pct": 82.6952610794208,
+      "avg_cl100k_base_tokens_per_packet": 449.7142857142857,
+      "reduction_vs_json_cl100k_base_pct": 94.66345705591674,
+      "reduction_vs_csv_cl100k_base_pct": 92.03058150426571,
+      "reduction_vs_tsln_cl100k_base_pct": 82.73365511189118
     },
     "chronosieve_high_recall": {
       "wake_packets": 25,
       "chars": 19481,
       "chars_div_4": 4870,
       "bpe_proxy_tokens": 10404,
+      "tiktoken_o200k_base": 10920,
+      "tiktoken_cl100k_base": 10895,
       "avg_bpe_tokens_per_packet": 416.16,
       "avg_chars4_tokens_per_packet": 194.8,
       "reduction_vs_json_bpe_pct": 93.65331120979943,
@@ -230,7 +268,15 @@
       "reduction_vs_tsln_bpe_pct": 76.63597574668762,
       "reduction_vs_tsln_chars4_pct": 63.136779956097186,
       "injected_anomaly_recall_pinned": 1.0,
-      "injected_anomaly_recall_wake_packets": 1.0
+      "injected_anomaly_recall_wake_packets": 1.0,
+      "avg_o200k_base_tokens_per_packet": 436.8,
+      "reduction_vs_json_o200k_base_pct": 91.04227847685922,
+      "reduction_vs_csv_o200k_base_pct": 86.17756512493355,
+      "reduction_vs_tsln_o200k_base_pct": 70.05265467310224,
+      "avg_cl100k_base_tokens_per_packet": 435.8,
+      "reduction_vs_json_cl100k_base_pct": 90.76530568999569,
+      "reduction_vs_csv_cl100k_base_pct": 86.20920989342042,
+      "reduction_vs_tsln_cl100k_base_pct": 70.12121544537078
     },
     "real_world_mauna_loa_co2": {
       "available": true,
@@ -240,17 +286,23 @@
       "raw_json": {
         "chars": 45616,
         "chars_div_4": 11404,
-        "bpe_proxy_tokens": 35601
+        "bpe_proxy_tokens": 35601,
+        "tiktoken_o200k_base": 23477,
+        "tiktoken_cl100k_base": 23477
       },
       "raw_csv": {
         "chars": 25593,
         "chars_div_4": 6398,
-        "bpe_proxy_tokens": 11128
+        "bpe_proxy_tokens": 11128,
+        "tiktoken_o200k_base": 14577,
+        "tiktoken_cl100k_base": 14577
       },
       "tsln_style_delta": {
         "chars": 12726,
         "chars_div_4": 3181,
-        "bpe_proxy_tokens": 10620
+        "bpe_proxy_tokens": 10620,
+        "tiktoken_o200k_base": 8591,
+        "tiktoken_cl100k_base": 8591
       },
       "chronosieve_swing_pla_digest": {
         "segments": 107,
@@ -261,12 +313,20 @@
         "chars": 5325,
         "chars_div_4": 1331,
         "bpe_proxy_tokens": 2988,
+        "tiktoken_o200k_base": 3242,
+        "tiktoken_cl100k_base": 3241,
         "reduction_vs_json_bpe_pct": 91.60697733209742,
         "reduction_vs_json_chars4_pct": 88.32865661171519,
         "reduction_vs_csv_bpe_pct": 73.14881380301941,
         "reduction_vs_csv_chars4_pct": 79.19662394498282,
         "reduction_vs_tsln_bpe_pct": 71.86440677966101,
-        "reduction_vs_tsln_chars4_pct": 58.15781200880225
+        "reduction_vs_tsln_chars4_pct": 58.15781200880225,
+        "reduction_vs_json_o200k_base_pct": 86.19073987306726,
+        "reduction_vs_csv_o200k_base_pct": 77.75948411881731,
+        "reduction_vs_tsln_o200k_base_pct": 62.262833197532295,
+        "reduction_vs_json_cl100k_base_pct": 86.1949993610768,
+        "reduction_vs_csv_cl100k_base_pct": 77.76634424092748,
+        "reduction_vs_tsln_cl100k_base_pct": 62.274473285996976
       }
     }
   },
@@ -281,7 +341,7 @@
       41,
       47,
       158,
-      161,
+      160,
       180
     ],
     "shift_ticks": [
@@ -292,13 +352,22 @@
       false,
       true
     ],
-    "prompt_chars": 3386,
-    "prompt_est_tokens": 846,
-    "prompt_bpe_proxy_tokens": 1827,
+    "prompt_chars": 3328,
+    "prompt_est_tokens": 832,
+    "prompt_bpe_proxy_tokens": 1789,
     "raw_json_chars_div_4": 2933,
     "raw_json_bpe_proxy_tokens": 8751,
-    "prompt_vs_raw_json_bpe_reduction_pct": 79.12238601302708,
-    "prompt_vs_raw_json_chars4_reduction_pct": 71.15581316058643,
-    "digest_captures_ground_truth": true
+    "prompt_vs_raw_json_bpe_reduction_pct": 79.55662210033138,
+    "prompt_vs_raw_json_chars4_reduction_pct": 71.63314012956018,
+    "digest_captures_ground_truth": true,
+    "prompt_tiktoken": {
+      "o200k_base": 1836,
+      "cl100k_base": 1830
+    },
+    "raw_json_tiktoken": {
+      "o200k_base": 6502,
+      "cl100k_base": 6502
+    },
+    "prompt_vs_raw_json_o200k_reduction_pct": 71.762534604737
   }
 }

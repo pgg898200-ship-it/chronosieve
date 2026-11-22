@@ -38,6 +38,7 @@ class ChronoSieve:
         epsilon: float = 0.05,
         edet_threshold: float = 500.0,
         rogue_threshold: float = 200.0,
+        peer_relative_rogue: bool = True,
         ring_capacity: int = 65536,
         warmup_cal: int = 32,
         anomaly_burst: int = 1,
@@ -76,6 +77,7 @@ class ChronoSieve:
                 n_agents=n_agents,
                 rogue_threshold=rogue_threshold,
                 quarantine_rogue=True,
+                peer_relative_rogue=peer_relative_rogue,
             )
             if n_agents > 1
             else None

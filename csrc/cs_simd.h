@@ -193,15 +193,18 @@ static inline float64x2_t cs_vtan_clamped_f64(float64x2_t theta) {
                                    vdupq_n_f64(CS_PI_HALF_LO));
     float64x2_t u = vbslq_f64(flip, u_flip, ax);
     float64x2_t u2 = vmulq_f64(u, u);
+    float64x2_t u4 = vmulq_f64(u2, u2);
+    float64x2_t u8 = vmulq_f64(u4, u4);
 
-    float64x2_t p = vfmaq_f64(vdupq_n_f64(CS_TAN_P2), u2, vdupq_n_f64(CS_TAN_P3));
-    p = vfmaq_f64(vdupq_n_f64(CS_TAN_P1), u2, p);
-    p = vfmaq_f64(vdupq_n_f64(CS_TAN_P0), u2, p);
+    /* Estrin evaluation cuts FMA latency depth vs Horner while keeping < 1e-15 accuracy */
+    float64x2_t p01 = vfmaq_f64(vdupq_n_f64(CS_TAN_P0), u2, vdupq_n_f64(CS_TAN_P1));
+    float64x2_t p23 = vfmaq_f64(vdupq_n_f64(CS_TAN_P2), u2, vdupq_n_f64(CS_TAN_P3));
+    float64x2_t p = vfmaq_f64(p01, u4, p23);
 
-    float64x2_t q = vfmaq_f64(vdupq_n_f64(CS_TAN_Q3), u2, vdupq_n_f64(CS_TAN_Q4));
-    q = vfmaq_f64(vdupq_n_f64(CS_TAN_Q2), u2, q);
-    q = vfmaq_f64(vdupq_n_f64(CS_TAN_Q1), u2, q);
-    q = vfmaq_f64(vdupq_n_f64(CS_TAN_Q0), u2, q);
+    float64x2_t q01 = vfmaq_f64(vdupq_n_f64(CS_TAN_Q0), u2, vdupq_n_f64(CS_TAN_Q1));
+    float64x2_t q23 = vfmaq_f64(vdupq_n_f64(CS_TAN_Q2), u2, vdupq_n_f64(CS_TAN_Q3));
+    float64x2_t q03 = vfmaq_f64(q01, u4, q23);
+    float64x2_t q = vfmaq_f64(q03, u8, vdupq_n_f64(CS_TAN_Q4));
 
     float64x2_t up = vmulq_f64(u, p);
     float64x2_t num = vbslq_f64(flip, q, up);
@@ -214,7 +217,7 @@ static inline float64x2_t cs_vtan_clamped_f64(float64x2_t theta) {
 #elif defined(CS_SIMD_AVX2)
 
 static inline __m256d cs_avx_fmadd(__m256d a, __m256d b, __m256d c) {
-#if defined(__FMA__)
+#if defined(__FMA__) || (defined(_MSC_VER) && defined(__AVX2__))
     return _mm256_fmadd_pd(a, b, c);
 #else
     return _mm256_add_pd(_mm256_mul_pd(a, b), c);
@@ -222,7 +225,7 @@ static inline __m256d cs_avx_fmadd(__m256d a, __m256d b, __m256d c) {
 }
 
 static inline __m256d cs_avx_fnmadd(__m256d a, __m256d b, __m256d c) {
-#if defined(__FMA__)
+#if defined(__FMA__) || (defined(_MSC_VER) && defined(__AVX2__))
     return _mm256_fnmadd_pd(a, b, c);
 #else
     return _mm256_sub_pd(c, _mm256_mul_pd(a, b));
@@ -290,15 +293,17 @@ static inline __m256d cs_vtan_clamped_f64(__m256d theta) {
         _mm256_set1_pd(CS_PI_HALF_LO));
     __m256d u = _mm256_blendv_pd(ax, u_flip, flip);
     __m256d u2 = _mm256_mul_pd(u, u);
+    __m256d u4 = _mm256_mul_pd(u2, u2);
+    __m256d u8 = _mm256_mul_pd(u4, u4);
 
-    __m256d p = cs_avx_fmadd(u2, _mm256_set1_pd(CS_TAN_P3), _mm256_set1_pd(CS_TAN_P2));
-    p = cs_avx_fmadd(u2, p, _mm256_set1_pd(CS_TAN_P1));
-    p = cs_avx_fmadd(u2, p, _mm256_set1_pd(CS_TAN_P0));
+    __m256d p01 = cs_avx_fmadd(u2, _mm256_set1_pd(CS_TAN_P1), _mm256_set1_pd(CS_TAN_P0));
+    __m256d p23 = cs_avx_fmadd(u2, _mm256_set1_pd(CS_TAN_P3), _mm256_set1_pd(CS_TAN_P2));
+    __m256d p = cs_avx_fmadd(u4, p23, p01);
 
-    __m256d q = cs_avx_fmadd(u2, _mm256_set1_pd(CS_TAN_Q4), _mm256_set1_pd(CS_TAN_Q3));
-    q = cs_avx_fmadd(u2, q, _mm256_set1_pd(CS_TAN_Q2));
-    q = cs_avx_fmadd(u2, q, _mm256_set1_pd(CS_TAN_Q1));
-    q = cs_avx_fmadd(u2, q, _mm256_set1_pd(CS_TAN_Q0));
+    __m256d q01 = cs_avx_fmadd(u2, _mm256_set1_pd(CS_TAN_Q1), _mm256_set1_pd(CS_TAN_Q0));
+    __m256d q23 = cs_avx_fmadd(u2, _mm256_set1_pd(CS_TAN_Q3), _mm256_set1_pd(CS_TAN_Q2));
+    __m256d q03 = cs_avx_fmadd(u4, q23, q01);
+    __m256d q = cs_avx_fmadd(u8, _mm256_set1_pd(CS_TAN_Q4), q03);
 
     __m256d up = _mm256_mul_pd(u, p);
     __m256d num = _mm256_blendv_pd(up, q, flip);

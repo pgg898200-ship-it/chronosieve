@@ -1,0 +1,28 @@
+{
+  "name": "chronosieve",
+  "owner": {
+    "name": "ChronoSieve Contributors",
+    "url": "https://github.com/pgg898200-ship-it/chronosieve"
+  },
+  "metadata": {
+    "description": "Zero-dependency C11/SIMD streaming inference, conformal uncertainty, multi-agent fusion & MCP digest engine.",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "chronosieve",
+      "source": "./",
+      "description": "Streaming e-detectors (507M ticks/s Bounded, 248M ticks/s Catoni), Pre-Control E-Reset Conformal PID (684M ch-tk/s), Sleeping Fixed-Share BOA with peer-relative rogue quarantine, and lossless-zoom Swing PLA digests via MCP.",
+      "version": "0.2.0",
+      "category": "monitoring",
+      "keywords": [
+        "time-series",
+        "streaming",
+        "conformal-prediction",
+        "changepoint-detection",
+        "multi-agent",
+        "mcp"
+      ]
+    }
+  ]
+}

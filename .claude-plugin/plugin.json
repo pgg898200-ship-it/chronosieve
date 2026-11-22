@@ -1,0 +1,29 @@
+{
+  "name": "chronosieve",
+  "version": "0.2.0",
+  "description": "Zero-dependency C11/SIMD streaming changepoint detection (zero-exp e-detectors), Pre-Control E-Reset Conformal PID, Sleeping Fixed-Share BOA multi-agent fusion with peer-relative rogue quarantine, and lossless-zoom Swing PLA LLM digest engine.",
+  "author": {
+    "name": "ChronoSieve Contributors",
+    "url": "https://github.com/pgg898200-ship-it/chronosieve"
+  },
+  "homepage": "https://pgg898200-ship-it.github.io/chronosieve/",
+  "repository": "https://github.com/pgg898200-ship-it/chronosieve",
+  "license": "MIT",
+  "keywords": [
+    "time-series",
+    "streaming",
+    "changepoint-detection",
+    "e-detector",
+    "conformal-prediction",
+    "multi-agent",
+    "mcp",
+    "simd"
+  ],
+  "skills": "./skills/",
+  "mcpServers": {
+    "chronosieve": {
+      "command": "chronosieve-mcp",
+      "args": []
+    }
+  }
+}

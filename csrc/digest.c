@@ -143,18 +143,22 @@ void cs_digest_reset(cs_digest_t *dig) {
     dig->consec_anoms = 0U;
 }
 
-static void cs_digest_append_seg(cs_digest_t *dig, const cs_segment_t *seg) {
+static inline void cs_digest_append_seg(cs_digest_t *dig, const cs_segment_t *seg) {
     dig->segs[dig->seg_head] = *seg;
-    dig->seg_head = (dig->seg_head + 1U) % dig->seg_cap;
+    if (++dig->seg_head == dig->seg_cap) {
+        dig->seg_head = 0U;
+    }
     if (dig->seg_size < dig->seg_cap) {
         dig->seg_size++;
     }
     dig->total_segments++;
 }
 
-static void cs_digest_append_anom(cs_digest_t *dig, const cs_anomaly_t *anom) {
+static inline void cs_digest_append_anom(cs_digest_t *dig, const cs_anomaly_t *anom) {
     dig->anoms[dig->anom_head] = *anom;
-    dig->anom_head = (dig->anom_head + 1U) % dig->anom_cap;
+    if (++dig->anom_head == dig->anom_cap) {
+        dig->anom_head = 0U;
+    }
     if (dig->anom_size < dig->anom_cap) {
         dig->anom_size++;
     }
@@ -252,7 +256,9 @@ cs_status_t cs_digest_push(
     rec.q_t = q_t;
     rec.flags = flags;
     dig->ring[dig->ring_head] = rec;
-    dig->ring_head = (dig->ring_head + 1U) % dig->ring_cap;
+    if (++dig->ring_head == dig->ring_cap) {
+        dig->ring_head = 0U;
+    }
     if (dig->ring_size < dig->ring_cap) {
         dig->ring_size++;
     }
@@ -379,6 +385,379 @@ cs_status_t cs_digest_push(
     return CS_OK;
 }
 
+static inline void cs_digest_emit_reg_open(
+    cs_digest_t *dig,
+    double open_t0,
+    double open_y0,
+    double open_t_last,
+    double m_min,
+    double m_max,
+    double s_dt2,
+    double s_dtdy,
+    uint32_t open_count)
+{
+    double slope = 0.0;
+    if (open_count > 1U && open_t_last > open_t0) {
+        double mid = m_min + 0.5 * (m_max - m_min);
+        if (!isfinite(mid)) {
+            mid = 0.5 * m_min + 0.5 * m_max;
+        }
+        double m = (s_dt2 > 0.0 && isfinite(s_dt2) && isfinite(s_dtdy))
+            ? (s_dtdy / s_dt2)
+            : mid;
+        if (!isfinite(m)) m = mid;
+        if (m < m_min) m = m_min;
+        if (m > m_max) m = m_max;
+        slope = m;
+    }
+    cs_segment_t seg;
+    seg.t_start = open_t0;
+    seg.y_start = open_y0;
+    seg.t_end = open_t_last;
+    seg.y_end = open_y0 + slope * (open_t_last - open_t0);
+    seg.slope = slope;
+    seg.count = open_count;
+    seg.flags = 0U;
+    cs_digest_append_seg(dig, &seg);
+}
+
+/* Tight register-resident + SIMD stationary fast path for flag-free batches.
+ * Preserves exact ULP-guarded L_inf <= epsilon, exact segment boundaries, and lossless ring buffer. */
+static cs_status_t cs_digest_push_batch_fast(
+    cs_digest_t *dig,
+    const double * CS_RESTRICT ts,
+    const double * CS_RESTRICT ys,
+    const double * CS_RESTRICT y_hats,
+    const double * CS_RESTRICT qs,
+    size_t n,
+    uint8_t * CS_RESTRICT out_wakes,
+    cs_digest_step_t *last_out)
+{
+    cs_ring_record_t * CS_RESTRICT ring = dig->ring;
+    const size_t ring_cap = dig->ring_cap;
+    const double eps_eff = dig->eps_eff;
+    const double ulp8 = 8.0 * DBL_EPSILON;
+    const bool simple_rec = (y_hats == NULL && qs == NULL);
+
+    size_t ring_head = dig->ring_head;
+    bool has_open = dig->has_open;
+    double open_t0 = dig->open_t0;
+    double open_y0 = dig->open_y0;
+    double abs_y0 = has_open ? fabs(open_y0) : 0.0;
+    double open_t_last = dig->open_t_last;
+    double open_y_last = dig->open_y_last;
+    double m_min = dig->m_min;
+    double m_max = dig->m_max;
+    double s_dt2 = dig->s_dt2;
+    double s_dtdy = dig->s_dtdy;
+    uint32_t open_count = dig->open_count;
+    bool has_any = dig->has_any;
+    double last_t = dig->last_t;
+    bool seg_emitted = false;
+    cs_status_t err = CS_OK;
+
+#if defined(CS_SIMD_NEON)
+    const float64x2_t vone = vdupq_n_f64(1.0);
+    const float64x2_t vzero = vdupq_n_f64(0.0);
+    const float64x2_t veps_eff = vdupq_n_f64(eps_eff);
+    const float64x2_t vulp8 = vdupq_n_f64(ulp8);
+#elif defined(CS_SIMD_AVX2)
+    const __m256d vone = _mm256_set1_pd(1.0);
+    const __m256d vzero = _mm256_setzero_pd();
+    const __m256d veps_eff = _mm256_set1_pd(eps_eff);
+    const __m256d vulp8 = _mm256_set1_pd(ulp8);
+    const __m256d sign_mask = _mm256_set1_pd(-0.0);
+#endif
+
+    size_t i = 0U;
+    while (i < n) {
+#if defined(CS_SIMD_NEON)
+        /* 2-wide NEON stationary fast path: if intersection of cone with BOTH points is non-empty,
+         * monotonicity of m_min/m_max proves point i was also valid (exact mathematical equivalence). */
+        if (CS_LIKELY(has_open && i + 2U <= n && abs_y0 < 1.0e150 && eps_eff < 1.0e150)) {
+            double t0 = ts[i];
+            double t1 = ts[i + 1U];
+            double y0 = ys[i];
+            double y1 = ys[i + 1U];
+            double dt0 = t0 - open_t0;
+            double dt1 = t1 - open_t0;
+            if (CS_LIKELY(t0 >= last_t && t1 >= t0 && dt0 > 1.0e-140 && dt1 < 1.0e150 &&
+                          fabs(y0) < 1.0e150 && fabs(y1) < 1.0e150)) {
+                float64x2_t vt = vld1q_f64(ts + i);
+                float64x2_t vy = vld1q_f64(ys + i);
+                float64x2_t vdt = vsubq_f64(vt, vdupq_n_f64(open_t0));
+                float64x2_t vdy = vsubq_f64(vy, vdupq_n_f64(open_y0));
+                float64x2_t vymag = vmaxq_f64(vabsq_f64(vy), vdupq_n_f64(abs_y0));
+                float64x2_t veps = vmaxq_f64(vzero, vfmsq_f64(veps_eff, vulp8, vymag));
+                float64x2_t vinv = vdivq_f64(vone, vdt);
+                float64x2_t vu = vmulq_f64(vaddq_f64(vdy, veps), vinv);
+                float64x2_t vl = vmulq_f64(vsubq_f64(vdy, veps), vinv);
+                double max_l = vmaxvq_f64(vl);
+                double min_u = vminvq_f64(vu);
+                double new_min = (max_l > m_min) ? max_l : m_min;
+                double new_max = (min_u < m_max) ? min_u : m_max;
+                if (CS_LIKELY(new_min <= new_max)) {
+                    m_min = new_min;
+                    m_max = new_max;
+                    open_t_last = t1;
+                    open_y_last = y1;
+                    double dy0 = y0 - open_y0;
+                    double dy1 = y1 - open_y0;
+                    s_dt2 = (s_dt2 + dt0 * dt0) + dt1 * dt1;
+                    s_dtdy = (s_dtdy + dt0 * dy0) + dt1 * dy1;
+                    open_count += 2U;
+                    last_t = t1;
+                    seg_emitted = false;
+
+                    if (CS_LIKELY(ring_head + 2U <= ring_cap)) {
+                        cs_ring_record_t *r = ring + ring_head;
+                        r[0].t = t0;
+                        r[0].y = y0;
+                        r[0].y_hat = simple_rec ? y0 : (y_hats ? y_hats[i] : y0);
+                        r[0].q_t = simple_rec ? NAN : (qs ? qs[i] : NAN);
+                        r[0].flags = 0U;
+                        r[1].t = t1;
+                        r[1].y = y1;
+                        r[1].y_hat = simple_rec ? y1 : (y_hats ? y_hats[i + 1U] : y1);
+                        r[1].q_t = simple_rec ? NAN : (qs ? qs[i + 1U] : NAN);
+                        r[1].flags = 0U;
+                        ring_head += 2U;
+                        if (CS_UNLIKELY(ring_head == ring_cap)) {
+                            ring_head = 0U;
+                        }
+                    } else {
+                        for (size_t k = 0U; k < 2U; ++k) {
+                            cs_ring_record_t *r = ring + ring_head;
+                            double tk = ts[i + k];
+                            double yk = ys[i + k];
+                            r->t = tk;
+                            r->y = yk;
+                            r->y_hat = y_hats ? y_hats[i + k] : yk;
+                            r->q_t = qs ? qs[i + k] : NAN;
+                            r->flags = 0U;
+                            if (++ring_head == ring_cap) {
+                                ring_head = 0U;
+                            }
+                        }
+                    }
+                    i += 2U;
+                    continue;
+                }
+            }
+        }
+#elif defined(CS_SIMD_AVX2)
+        if (CS_LIKELY(has_open && i + 4U <= n && abs_y0 < 1.0e150 && eps_eff < 1.0e150)) {
+            double t0 = ts[i];
+            double t1 = ts[i + 1U];
+            double t2 = ts[i + 2U];
+            double t3 = ts[i + 3U];
+            double y0 = ys[i];
+            double y1 = ys[i + 1U];
+            double y2 = ys[i + 2U];
+            double y3 = ys[i + 3U];
+            double dt0 = t0 - open_t0;
+            double dt3 = t3 - open_t0;
+            if (CS_LIKELY(t0 >= last_t && t1 >= t0 && t2 >= t1 && t3 >= t2 &&
+                          dt0 > 1.0e-140 && dt3 < 1.0e150 &&
+                          fabs(y0) < 1.0e150 && fabs(y1) < 1.0e150 &&
+                          fabs(y2) < 1.0e150 && fabs(y3) < 1.0e150)) {
+                __m256d vt = _mm256_loadu_pd(ts + i);
+                __m256d vy = _mm256_loadu_pd(ys + i);
+                __m256d vdt = _mm256_sub_pd(vt, _mm256_set1_pd(open_t0));
+                __m256d vdy = _mm256_sub_pd(vy, _mm256_set1_pd(open_y0));
+                __m256d vymag = _mm256_max_pd(_mm256_andnot_pd(sign_mask, vy), _mm256_set1_pd(abs_y0));
+                __m256d veps = _mm256_max_pd(vzero, cs_avx_fnmadd(vulp8, vymag, veps_eff));
+                __m256d vinv = _mm256_div_pd(vone, vdt);
+                __m256d vu = _mm256_mul_pd(_mm256_add_pd(vdy, veps), vinv);
+                __m256d vl = _mm256_mul_pd(_mm256_sub_pd(vdy, veps), vinv);
+                double ua[4], la[4];
+                _mm256_storeu_pd(ua, vu);
+                _mm256_storeu_pd(la, vl);
+                double max_l = fmax(fmax(la[0], la[1]), fmax(la[2], la[3]));
+                double min_u = fmin(fmin(ua[0], ua[1]), fmin(ua[2], ua[3]));
+                double new_min = (max_l > m_min) ? max_l : m_min;
+                double new_max = (min_u < m_max) ? min_u : m_max;
+                if (CS_LIKELY(new_min <= new_max)) {
+                    m_min = new_min;
+                    m_max = new_max;
+                    open_t_last = t3;
+                    open_y_last = y3;
+                    double dt1 = t1 - open_t0;
+                    double dt2 = t2 - open_t0;
+                    s_dt2 = (((s_dt2 + dt0 * dt0) + dt1 * dt1) + dt2 * dt2) + dt3 * dt3;
+                    s_dtdy = (((s_dtdy + dt0 * (y0 - open_y0)) + dt1 * (y1 - open_y0)) +
+                              dt2 * (y2 - open_y0)) + dt3 * (y3 - open_y0);
+                    open_count += 4U;
+                    last_t = t3;
+                    seg_emitted = false;
+
+                    if (CS_LIKELY(ring_head + 4U <= ring_cap)) {
+                        cs_ring_record_t *r = ring + ring_head;
+                        for (size_t k = 0U; k < 4U; ++k) {
+                            double yk = ys[i + k];
+                            r[k].t = ts[i + k];
+                            r[k].y = yk;
+                            r[k].y_hat = simple_rec ? yk : (y_hats ? y_hats[i + k] : yk);
+                            r[k].q_t = simple_rec ? NAN : (qs ? qs[i + k] : NAN);
+                            r[k].flags = 0U;
+                        }
+                        ring_head += 4U;
+                        if (CS_UNLIKELY(ring_head == ring_cap)) {
+                            ring_head = 0U;
+                        }
+                    } else {
+                        for (size_t k = 0U; k < 4U; ++k) {
+                            cs_ring_record_t *r = ring + ring_head;
+                            double yk = ys[i + k];
+                            r->t = ts[i + k];
+                            r->y = yk;
+                            r->y_hat = y_hats ? y_hats[i + k] : yk;
+                            r->q_t = qs ? qs[i + k] : NAN;
+                            r->flags = 0U;
+                            if (++ring_head == ring_cap) {
+                                ring_head = 0U;
+                            }
+                        }
+                    }
+                    i += 4U;
+                    continue;
+                }
+            }
+        }
+#endif
+
+        /* Scalar exact path (segment start/close, tail, or non-stationary point) */
+        double t = ts[i];
+        double y = ys[i];
+        if (CS_UNLIKELY(!isfinite(t) || !isfinite(y))) {
+            err = CS_ERR_NONFINITE;
+            break;
+        }
+        if (CS_UNLIKELY(has_any && t < last_t)) {
+            err = CS_ERR_INVALID;
+            break;
+        }
+
+        cs_ring_record_t *r = ring + ring_head;
+        r->t = t;
+        r->y = y;
+        r->y_hat = simple_rec ? y : (y_hats ? y_hats[i] : y);
+        r->q_t = simple_rec ? NAN : (qs ? qs[i] : NAN);
+        r->flags = 0U;
+        if (++ring_head == ring_cap) {
+            ring_head = 0U;
+        }
+
+        has_any = true;
+        last_t = t;
+        seg_emitted = false;
+
+        if (CS_UNLIKELY(!has_open)) {
+            has_open = true;
+            open_t0 = t;
+            open_y0 = y;
+            abs_y0 = fabs(y);
+            open_t_last = t;
+            open_y_last = y;
+            m_min = -DBL_MAX;
+            m_max = DBL_MAX;
+            s_dt2 = 0.0;
+            s_dtdy = 0.0;
+            open_count = 1U;
+        } else {
+            double dt = t - open_t0;
+            double ay = fabs(y);
+            double y_mag = (ay > abs_y0) ? ay : abs_y0;
+            double ulp_guard = ulp8 * y_mag;
+            double eps_pt = (eps_eff > ulp_guard) ? (eps_eff - ulp_guard) : 0.0;
+
+            if (CS_UNLIKELY(!isfinite(dt))) {
+                cs_digest_emit_reg_open(dig, open_t0, open_y0, open_t_last, m_min, m_max, s_dt2, s_dtdy, open_count);
+                seg_emitted = true;
+                open_t0 = t; open_y0 = y; abs_y0 = ay;
+                open_t_last = t; open_y_last = y;
+                m_min = -DBL_MAX; m_max = DBL_MAX; s_dt2 = 0.0; s_dtdy = 0.0; open_count = 1U;
+            } else if (CS_UNLIKELY(dt <= 0.0)) {
+                if (fabs(y - open_y0) <= eps_pt) {
+                    open_count++;
+                } else {
+                    cs_digest_emit_reg_open(dig, open_t0, open_y0, open_t_last, m_min, m_max, s_dt2, s_dtdy, open_count);
+                    seg_emitted = true;
+                    open_t0 = t; open_y0 = y; abs_y0 = ay;
+                    open_t_last = t; open_y_last = y;
+                    m_min = -DBL_MAX; m_max = DBL_MAX; s_dt2 = 0.0; s_dtdy = 0.0; open_count = 1U;
+                }
+            } else {
+                double dy = y - open_y0;
+                double inv_dt = 1.0 / dt;
+                double u_i = CS_LIKELY(isfinite(inv_dt)) ? ((dy + eps_pt) * inv_dt) : ((dy + eps_pt) / dt);
+                double l_i = CS_LIKELY(isfinite(inv_dt)) ? ((dy - eps_pt) * inv_dt) : ((dy - eps_pt) / dt);
+                double new_min = (l_i > m_min) ? l_i : m_min;
+                double new_max = (u_i < m_max) ? u_i : m_max;
+
+                if (CS_LIKELY(isfinite(u_i) && isfinite(l_i) && new_min <= new_max)) {
+                    m_min = new_min;
+                    m_max = new_max;
+                    open_t_last = t;
+                    open_y_last = y;
+                    s_dt2 += dt * dt;
+                    s_dtdy += dt * dy;
+                    open_count++;
+                } else {
+                    cs_digest_emit_reg_open(dig, open_t0, open_y0, open_t_last, m_min, m_max, s_dt2, s_dtdy, open_count);
+                    seg_emitted = true;
+                    open_t0 = t; open_y0 = y; abs_y0 = ay;
+                    open_t_last = t; open_y_last = y;
+                    m_min = -DBL_MAX; m_max = DBL_MAX; s_dt2 = 0.0; s_dtdy = 0.0; open_count = 1U;
+                }
+            }
+        }
+        i++;
+    }
+
+    /* Commit register-cached state back to dig */
+    const size_t done = i;
+    dig->ring_head = ring_head;
+    if (done > ring_cap - dig->ring_size) {
+        dig->ring_evicted = true;
+        dig->ring_size = ring_cap;
+    } else {
+        dig->ring_size += done;
+    }
+    dig->has_open = has_open;
+    dig->open_t0 = open_t0;
+    dig->open_y0 = open_y0;
+    dig->open_t_last = open_t_last;
+    dig->open_y_last = open_y_last;
+    dig->m_min = m_min;
+    dig->m_max = m_max;
+    dig->s_dt2 = s_dt2;
+    dig->s_dtdy = s_dtdy;
+    dig->open_count = open_count;
+    dig->has_any = has_any;
+    dig->last_t = last_t;
+    dig->total_points += (uint64_t)done;
+    if (done > 0U) {
+        dig->consec_anoms = 0U;
+        if (out_wakes) {
+            memset(out_wakes, 0, done);
+        }
+    }
+
+    if (err != CS_OK) {
+        return err;
+    }
+    if (last_out) {
+        last_out->total_points = dig->total_points;
+        last_out->total_segments = dig->total_segments;
+        last_out->total_anomalies = dig->total_anomalies;
+        last_out->wake_count = dig->wake_count;
+        last_out->should_wake = false;
+        last_out->segment_emitted = seg_emitted;
+    }
+    return CS_OK;
+}
+
 cs_status_t cs_digest_push_batch(
     cs_digest_t *dig,
     const double *ts,
@@ -394,13 +773,28 @@ cs_status_t cs_digest_push_batch(
     if (!dig || (n > 0 && (!ts || !ys))) {
         return CS_ERR_INVALID;
     }
+    if (n == 0U) {
+        if (last_out) {
+            last_out->total_points = dig->total_points;
+            last_out->total_segments = dig->total_segments;
+            last_out->total_anomalies = dig->total_anomalies;
+            last_out->wake_count = dig->wake_count;
+            last_out->should_wake = false;
+            last_out->segment_emitted = false;
+        }
+        return CS_OK;
+    }
+    if (!flags) {
+        return cs_digest_push_batch_fast(dig, ts, ys, y_hats, qs, n, out_wakes, last_out);
+    }
+
     cs_digest_step_t step;
     memset(&step, 0, sizeof(step));
     for (size_t i = 0; i < n; ++i) {
         double yh = y_hats ? y_hats[i] : ys[i];
         double q = qs ? qs[i] : NAN;
         double es = edet_stats ? edet_stats[i] : 0.0;
-        uint32_t fl = flags ? flags[i] : 0U;
+        uint32_t fl = flags[i];
         cs_status_t st = cs_digest_push(dig, ts[i], ys[i], yh, q, es, fl, &step);
         if (st != CS_OK) {
             return st;
@@ -410,14 +804,6 @@ cs_status_t cs_digest_push_batch(
         }
     }
     if (last_out) {
-        if (n == 0) {
-            step.total_points = dig->total_points;
-            step.total_segments = dig->total_segments;
-            step.total_anomalies = dig->total_anomalies;
-            step.wake_count = dig->wake_count;
-            step.should_wake = false;
-            step.segment_emitted = false;
-        }
         *last_out = step;
     }
     return CS_OK;

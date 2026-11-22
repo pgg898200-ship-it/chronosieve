@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 415" width="920" height="415" role="img" aria-label="Real OpenAI tiktoken o200k_base Token Compression">
+  <title>Real OpenAI tiktoken o200k_base Token Compression</title>
+  <desc>Token counts on Mauna Loa CO2 and 10k telemetry comparing Raw JSON, CSV, TSLN, and ChronoSieve.</desc>
+  <rect x="0.5" y="0.5" width="919" height="414" rx="12" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="28" y="38" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="18" font-weight="700">Real OpenAI tiktoken (o200k_base) Token Reduction</text>
+  <text x="28" y="60" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12">Measured with real tiktoken v0.14.0 (o200k_base) · Guaranteed L_inf error bound + verbatim anomalies (lower is better)</text>
+  <rect x="24" y="78" width="424" height="296" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <rect x="472" y="78" width="424" height="296" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="44" y="104" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700">Mauna Loa CO2 (N=2,225, Full Series, L_inf&lt;=1 ppm)</text>
+  <text x="44" y="121" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11">No wake-up gating · 107 Swing PLA segments (20.8x PLA)</text>
+  <text x="492" y="104" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13.5" font-weight="700">10,000-Tick Telemetry (2 Shifts + 3 Sharp Anomalies)</text>
+  <text x="492" y="121" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11">Wake-Up Gate + Pre-Control E-Reset PID + Swing PLA</text>
+  <text x="176" y="163.0" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400">Raw JSON</text>
+  <rect x="186" y="148" width="172.0" height="22" rx="4" fill="#64748b"/>
+  <text x="365.0" y="163.0" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400">23,477</text>
+  <text x="176" y="205.0" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400">Raw CSV</text>
+  <rect x="186" y="190" width="106.8" height="22" rx="4" fill="#818cf8"/>
+  <text x="299.8" y="205.0" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400">14,577</text>
+  <text x="176" y="247.0" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400">TSLN-style Delta</text>
+  <rect x="186" y="232" width="62.9" height="22" rx="4" fill="#fbbf24"/>
+  <text x="255.9" y="247.0" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400">8,591</text>
+  <text x="176" y="289.0" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="700">ChronoSieve PLA</text>
+  <rect x="186" y="274" width="23.8" height="22" rx="4" fill="#34d399"/>
+  <text x="216.8" y="289.0" fill="#34d399" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700">3,242 (-86.2%)</text>
+  <text x="236.0" y="356" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">-86.2% vs JSON · -62.3% vs TSLN (full history)</text>
+  <text x="624" y="154.9" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400">Raw JSON</text>
+  <rect x="634" y="142" width="172.0" height="19" rx="4" fill="#64748b"/>
+  <text x="813.0" y="154.9" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400">121,906</text>
+  <text x="624" y="190.9" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400">Raw CSV</text>
+  <rect x="634" y="178" width="111.5" height="19" rx="4" fill="#818cf8"/>
+  <text x="752.5" y="190.9" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400">79,002</text>
+  <text x="624" y="226.9" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400">TSLN-style Delta</text>
+  <rect x="634" y="214" width="51.4" height="19" rx="4" fill="#fbbf24"/>
+  <text x="692.4" y="226.9" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="400">36,464</text>
+  <text x="624" y="262.9" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="700">ChronoSieve (Hi-Rec)</text>
+  <rect x="634" y="250" width="15.4" height="19" rx="4" fill="#38bdf8"/>
+  <text x="656.4" y="262.9" fill="#38bdf8" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700">10,920 (-91.0%)</text>
+  <text x="624" y="298.9" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="700">ChronoSieve (Burst-2)</text>
+  <rect x="634" y="286" width="8.9" height="19" rx="4" fill="#34d399"/>
+  <text x="649.9" y="298.9" fill="#34d399" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5" font-weight="700">6,310 (-94.8%)</text>
+  <text x="684.0" y="356" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">Hi-Recall: 100% spike recall (-91.0%) · Burst-2: -94.8%</text>
+  <text x="28" y="401" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5">Source: benchmarks/results_m4.json · Zero runtime dependencies in chronosieve (tiktoken used in benchmark harness only).</text>
+</svg>

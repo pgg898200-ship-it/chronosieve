@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Reproducible LLM token reduction benchmark: Raw JSON vs CSV vs TSLN-style vs ChronoSieve."""
+"""Reproducible LLM token reduction benchmark: Raw JSON vs CSV vs TSLN-style vs ChronoSieve.
+
+Measures real OpenAI `tiktoken` (`o200k_base` and `cl100k_base`) when installed (respecting
+`TIKTOKEN_CACHE_DIR`), alongside deterministic zero-dependency `chars // 4` and BPE-proxy counts.
+"""
 
 from __future__ import annotations
 
 import importlib
+import importlib.metadata
 import json
 import re
 from typing import Any
@@ -16,12 +21,45 @@ def approx_bpe_tokens(text: str) -> int:
     """Deterministic BPE-proxy token counter (subword chunks + punctuation, close to cl100k_base)."""
     if not text:
         return 0
-    # Split into runs of alnum (chunked at <=4 chars) or single punctuation/symbols
     parts = re.findall(r"[A-Za-z0-9]+|[^\sA-Za-z0-9]", text)
     total = 0
     for p in parts:
         total += max(1, (len(p) + 3) // 4)
     return total
+
+
+def _load_tiktoken_encoders() -> tuple[dict[str, Any], str | None]:
+    """Load real OpenAI tiktoken encoders if installed & cached/reachable; fail gracefully otherwise."""
+    try:
+        tiktoken = importlib.import_module("tiktoken")
+    except ImportError:
+        return {}, None
+
+    version: str | None = getattr(tiktoken, "__version__", None)
+    if version is None:
+        try:
+            version = importlib.metadata.version("tiktoken")
+        except importlib.metadata.PackageNotFoundError:
+            version = None
+
+    encoders: dict[str, Any] = {}
+    for name in ("o200k_base", "cl100k_base"):
+        try:
+            encoders[name] = tiktoken.get_encoding(name)
+        except Exception:
+            continue
+    return encoders, version
+
+
+def _token_stats(text: str, encoders: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "chars": len(text),
+        "chars_div_4": len(text) // 4,
+        "bpe_proxy_tokens": approx_bpe_tokens(text),
+    }
+    for name, enc in encoders.items():
+        out[f"tiktoken_{name}"] = len(enc.encode(text))
+    return out
 
 
 def encode_tsln_style(ys: np.ndarray, window: int = 250) -> str:
@@ -70,7 +108,10 @@ def _reconstruct_from_markdown_linf(pla_md: str, ys: np.ndarray) -> float:
     return float(max_err)
 
 
-def run_mauna_loa_co2_benchmark(epsilon: float = 1.0) -> dict[str, Any]:
+def run_mauna_loa_co2_benchmark(
+    epsilon: float = 1.0,
+    encoders: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Real-world Mauna Loa CO2 (N=2,225 weekly obs, eps=1.0 ppm) full-series comparison.
 
     Gracefully skips if optional `statsmodels` is not installed (runtime stays 0-dependency).
@@ -79,6 +120,9 @@ def run_mauna_loa_co2_benchmark(epsilon: float = 1.0) -> dict[str, Any]:
         sm = importlib.import_module("statsmodels.api")
     except ImportError:
         return {"available": False, "reason": "statsmodels not installed"}
+
+    if encoders is None:
+        encoders, _ = _load_tiktoken_encoders()
 
     co2_df = sm.datasets.co2.load_pandas().data.dropna()
     ys = np.ascontiguousarray(co2_df["co2"].to_numpy(dtype=np.float64))
@@ -103,39 +147,46 @@ def run_mauna_loa_co2_benchmark(epsilon: float = 1.0) -> dict[str, Any]:
     pla_md = dig.format_markdown(channel="mauna_loa_co2", max_segments=n_segs)
     md_linf_err = _reconstruct_from_markdown_linf(pla_md, ys)
 
-    c4_json, bpe_json = len(raw_json) // 4, approx_bpe_tokens(raw_json)
-    c4_csv, bpe_csv = len(raw_csv) // 4, approx_bpe_tokens(raw_csv)
-    c4_tsln, bpe_tsln = len(tsln_text) // 4, approx_bpe_tokens(tsln_text)
-    c4_pla, bpe_pla = len(pla_md) // 4, approx_bpe_tokens(pla_md)
+    st_json = _token_stats(raw_json, encoders)
+    st_csv = _token_stats(raw_csv, encoders)
+    st_tsln = _token_stats(tsln_text, encoders)
+    st_pla = _token_stats(pla_md, encoders)
+
+    pla_entry: dict[str, Any] = {
+        "segments": n_segs,
+        "pla_compression_ratio": n_obs / n_segs,
+        "max_linf_err_ppm": max_linf_err,
+        "markdown_reconstruct_max_linf_ppm": md_linf_err,
+        "linf_verified": bool(max_linf_err <= epsilon),
+        **st_pla,
+        "reduction_vs_json_bpe_pct": _pct_reduction(st_pla["bpe_proxy_tokens"], st_json["bpe_proxy_tokens"]),
+        "reduction_vs_json_chars4_pct": _pct_reduction(st_pla["chars_div_4"], st_json["chars_div_4"]),
+        "reduction_vs_csv_bpe_pct": _pct_reduction(st_pla["bpe_proxy_tokens"], st_csv["bpe_proxy_tokens"]),
+        "reduction_vs_csv_chars4_pct": _pct_reduction(st_pla["chars_div_4"], st_csv["chars_div_4"]),
+        "reduction_vs_tsln_bpe_pct": _pct_reduction(st_pla["bpe_proxy_tokens"], st_tsln["bpe_proxy_tokens"]),
+        "reduction_vs_tsln_chars4_pct": _pct_reduction(st_pla["chars_div_4"], st_tsln["chars_div_4"]),
+    }
+    for enc_name in encoders:
+        k = f"tiktoken_{enc_name}"
+        pla_entry[f"reduction_vs_json_{enc_name}_pct"] = _pct_reduction(st_pla[k], st_json[k])
+        pla_entry[f"reduction_vs_csv_{enc_name}_pct"] = _pct_reduction(st_pla[k], st_csv[k])
+        pla_entry[f"reduction_vs_tsln_{enc_name}_pct"] = _pct_reduction(st_pla[k], st_tsln[k])
 
     return {
         "available": True,
         "dataset": "statsmodels.datasets.co2 (Mauna Loa Weekly CO2, 1958-2001)",
         "n_obs": n_obs,
         "epsilon_ppm": epsilon,
-        "raw_json": {"chars": len(raw_json), "chars_div_4": c4_json, "bpe_proxy_tokens": bpe_json},
-        "raw_csv": {"chars": len(raw_csv), "chars_div_4": c4_csv, "bpe_proxy_tokens": bpe_csv},
-        "tsln_style_delta": {"chars": len(tsln_text), "chars_div_4": c4_tsln, "bpe_proxy_tokens": bpe_tsln},
-        "chronosieve_swing_pla_digest": {
-            "segments": n_segs,
-            "pla_compression_ratio": n_obs / n_segs,
-            "max_linf_err_ppm": max_linf_err,
-            "markdown_reconstruct_max_linf_ppm": md_linf_err,
-            "linf_verified": bool(max_linf_err <= epsilon),
-            "chars": len(pla_md),
-            "chars_div_4": c4_pla,
-            "bpe_proxy_tokens": bpe_pla,
-            "reduction_vs_json_bpe_pct": _pct_reduction(bpe_pla, bpe_json),
-            "reduction_vs_json_chars4_pct": _pct_reduction(c4_pla, c4_json),
-            "reduction_vs_csv_bpe_pct": _pct_reduction(bpe_pla, bpe_csv),
-            "reduction_vs_csv_chars4_pct": _pct_reduction(c4_pla, c4_csv),
-            "reduction_vs_tsln_bpe_pct": _pct_reduction(bpe_pla, bpe_tsln),
-            "reduction_vs_tsln_chars4_pct": _pct_reduction(c4_pla, c4_tsln),
-        },
+        "raw_json": st_json,
+        "raw_csv": st_csv,
+        "tsln_style_delta": st_tsln,
+        "chronosieve_swing_pla_digest": pla_entry,
     }
 
 
 def run_token_benchmark(n_ticks: int = 10_000) -> dict[str, Any]:
+    encoders, tiktoken_ver = _load_tiktoken_encoders()
+
     rng = np.random.default_rng(2026)
     ts = np.arange(n_ticks, dtype=np.float64)
     # Realistic telemetry: slow sinusoidal drift + small noise + 2 regime shifts + 3 sharp anomalies
@@ -159,7 +210,6 @@ def run_token_benchmark(n_ticks: int = 10_000) -> dict[str, Any]:
     tsln_text = encode_tsln_style(ys, window=250)
 
     # 4. ChronoSieve: Wake-Up Gate + Pre-Control E-Reset PID + Anomaly-Preserving Swing PLA
-    #    Only emits compact Markdown digest packets on certified shifts or anomaly bursts!
     pipe = cs.ChronoSieve(
         channel="telemetry_p99",
         n_agents=1,
@@ -170,7 +220,6 @@ def run_token_benchmark(n_ticks: int = 10_000) -> dict[str, Any]:
         anomaly_burst=2,
         wake_cooldown=50,
     )
-    # High-recall mode (1-tick anomaly wakeup with conservative alpha=0.002)
     pipe_strict = cs.ChronoSieve(
         channel="telemetry_p99",
         n_agents=1,
@@ -199,65 +248,54 @@ def run_token_benchmark(n_ticks: int = 10_000) -> dict[str, Any]:
     cs_all_text = "\n\n".join(wakes_packets)
     cs_strict_text = "\n\n".join(strict_packets)
 
-    c4_json, tok_json = len(raw_json) // 4, approx_bpe_tokens(raw_json)
-    c4_csv, tok_csv = len(raw_csv) // 4, approx_bpe_tokens(raw_csv)
-    c4_tsln, tok_tsln = len(tsln_text) // 4, approx_bpe_tokens(tsln_text)
-    c4_cs, tok_cs = len(cs_all_text) // 4, approx_bpe_tokens(cs_all_text)
-    c4_cs_strict, tok_cs_strict = len(cs_strict_text) // 4, approx_bpe_tokens(cs_strict_text)
+    st_json = _token_stats(raw_json, encoders)
+    st_csv = _token_stats(raw_csv, encoders)
+    st_tsln = _token_stats(tsln_text, encoders)
+    st_cs = _token_stats(cs_all_text, encoders)
+    st_strict = _token_stats(cs_strict_text, encoders)
 
-    avg_packet_bpe = (tok_cs / len(wakes_packets)) if wakes_packets else 0.0
-    avg_packet_c4 = (c4_cs / len(wakes_packets)) if wakes_packets else 0.0
-    avg_strict_bpe = (tok_cs_strict / len(strict_packets)) if strict_packets else 0.0
-    avg_strict_c4 = (c4_cs_strict / len(strict_packets)) if strict_packets else 0.0
-
-    gated_pinned_recall = sum(1 for a in true_anoms if a in gated_pinned_ts) / len(true_anoms)
-    gated_wake_recall = sum(1 for a in true_anoms if f"t={a}.00" in cs_all_text) / len(true_anoms)
-    strict_pinned_recall = sum(1 for a in true_anoms if a in strict_pinned_ts) / len(true_anoms)
-    strict_wake_recall = sum(1 for a in true_anoms if f"t={a}.00" in cs_strict_text) / len(true_anoms)
+    def _build_cs_entry(
+        st: dict[str, Any], packets: list[str], pinned_ts: set[int], text: str
+    ) -> dict[str, Any]:
+        n_pk = len(packets)
+        entry: dict[str, Any] = {
+            "wake_packets": n_pk,
+            **st,
+            "avg_bpe_tokens_per_packet": (st["bpe_proxy_tokens"] / n_pk) if n_pk else 0.0,
+            "avg_chars4_tokens_per_packet": (st["chars_div_4"] / n_pk) if n_pk else 0.0,
+            "reduction_vs_json_bpe_pct": _pct_reduction(st["bpe_proxy_tokens"], st_json["bpe_proxy_tokens"]),
+            "reduction_vs_json_chars4_pct": _pct_reduction(st["chars_div_4"], st_json["chars_div_4"]),
+            "reduction_vs_csv_bpe_pct": _pct_reduction(st["bpe_proxy_tokens"], st_csv["bpe_proxy_tokens"]),
+            "reduction_vs_csv_chars4_pct": _pct_reduction(st["chars_div_4"], st_csv["chars_div_4"]),
+            "reduction_vs_tsln_bpe_pct": _pct_reduction(st["bpe_proxy_tokens"], st_tsln["bpe_proxy_tokens"]),
+            "reduction_vs_tsln_chars4_pct": _pct_reduction(st["chars_div_4"], st_tsln["chars_div_4"]),
+            "injected_anomaly_recall_pinned": sum(1 for a in true_anoms if a in pinned_ts) / len(true_anoms),
+            "injected_anomaly_recall_wake_packets": (
+                sum(1 for a in true_anoms if f"t={a}.00" in text) / len(true_anoms)
+            ),
+        }
+        for enc_name in encoders:
+            k = f"tiktoken_{enc_name}"
+            entry[f"avg_{enc_name}_tokens_per_packet"] = (st[k] / n_pk) if n_pk else 0.0
+            entry[f"reduction_vs_json_{enc_name}_pct"] = _pct_reduction(st[k], st_json[k])
+            entry[f"reduction_vs_csv_{enc_name}_pct"] = _pct_reduction(st[k], st_csv[k])
+            entry[f"reduction_vs_tsln_{enc_name}_pct"] = _pct_reduction(st[k], st_tsln[k])
+        return entry
 
     return {
         "n_ticks": n_ticks,
+        "tiktoken_available": bool(encoders),
+        "tiktoken_version": tiktoken_ver,
+        "tiktoken_encodings": sorted(encoders.keys()),
         "true_anomalies": true_anoms,
-        "raw_json": {"chars": len(raw_json), "chars_div_4": c4_json, "bpe_proxy_tokens": tok_json},
-        "raw_csv": {"chars": len(raw_csv), "chars_div_4": c4_csv, "bpe_proxy_tokens": tok_csv},
-        "tsln_style_delta": {
-            "chars": len(tsln_text),
-            "chars_div_4": c4_tsln,
-            "bpe_proxy_tokens": tok_tsln,
-        },
-        "chronosieve_gated_burst2": {
-            "wake_packets": len(wakes_packets),
-            "chars": len(cs_all_text),
-            "chars_div_4": c4_cs,
-            "bpe_proxy_tokens": tok_cs,
-            "avg_bpe_tokens_per_packet": avg_packet_bpe,
-            "avg_chars4_tokens_per_packet": avg_packet_c4,
-            "reduction_vs_json_bpe_pct": _pct_reduction(tok_cs, tok_json),
-            "reduction_vs_json_chars4_pct": _pct_reduction(c4_cs, c4_json),
-            "reduction_vs_csv_bpe_pct": _pct_reduction(tok_cs, tok_csv),
-            "reduction_vs_csv_chars4_pct": _pct_reduction(c4_cs, c4_csv),
-            "reduction_vs_tsln_bpe_pct": _pct_reduction(tok_cs, tok_tsln),
-            "reduction_vs_tsln_chars4_pct": _pct_reduction(c4_cs, c4_tsln),
-            "injected_anomaly_recall_pinned": gated_pinned_recall,
-            "injected_anomaly_recall_wake_packets": gated_wake_recall,
-        },
-        "chronosieve_high_recall": {
-            "wake_packets": len(strict_packets),
-            "chars": len(cs_strict_text),
-            "chars_div_4": c4_cs_strict,
-            "bpe_proxy_tokens": tok_cs_strict,
-            "avg_bpe_tokens_per_packet": avg_strict_bpe,
-            "avg_chars4_tokens_per_packet": avg_strict_c4,
-            "reduction_vs_json_bpe_pct": _pct_reduction(tok_cs_strict, tok_json),
-            "reduction_vs_json_chars4_pct": _pct_reduction(c4_cs_strict, c4_json),
-            "reduction_vs_csv_bpe_pct": _pct_reduction(tok_cs_strict, tok_csv),
-            "reduction_vs_csv_chars4_pct": _pct_reduction(c4_cs_strict, c4_csv),
-            "reduction_vs_tsln_bpe_pct": _pct_reduction(tok_cs_strict, tok_tsln),
-            "reduction_vs_tsln_chars4_pct": _pct_reduction(c4_cs_strict, c4_tsln),
-            "injected_anomaly_recall_pinned": strict_pinned_recall,
-            "injected_anomaly_recall_wake_packets": strict_wake_recall,
-        },
-        "real_world_mauna_loa_co2": run_mauna_loa_co2_benchmark(epsilon=1.0),
+        "raw_json": st_json,
+        "raw_csv": st_csv,
+        "tsln_style_delta": st_tsln,
+        "chronosieve_gated_burst2": _build_cs_entry(st_cs, wakes_packets, gated_pinned_ts, cs_all_text),
+        "chronosieve_high_recall": _build_cs_entry(
+            st_strict, strict_packets, strict_pinned_ts, cs_strict_text
+        ),
+        "real_world_mauna_loa_co2": run_mauna_loa_co2_benchmark(epsilon=1.0, encoders=encoders),
     }
 
 

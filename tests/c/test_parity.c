@@ -56,26 +56,52 @@ int main(void) {
         cs_edet_destroy(d);
     }
 
-    /* 3. Bounded & Symmetry & Vovk Rank E-SR */
+    /* 3. Bounded (1-sided & 2-sided), Symmetry (1-sided & 2-sided), & Vovk Rank E-SR */
     {
         cs_edet_config_t cfg;
+        cs_edet_result_t r;
+        double bstats[500];
+
         cs_edet_config_default(&cfg);
         cfg.family = CS_FAMILY_BOUNDED;
+        cfg.side = CS_SIDE_TWO_SIDED;
         cfg.mu0 = 0.5;
         cfg.threshold = 1.0e12;
         cs_edetector_t *d = cs_edet_create(&cfg);
-        cs_edet_result_t r;
-        cs_edet_step_batch(d, zs, N, NULL, NULL, &r);
+        cs_edet_step_batch(d, zs, N, bstats, NULL, &r);
+        printf("bounded_2s_mid %.17g\n", bstats[250]);
         printf("bounded_final %.17g\n", r.stat);
         cs_edet_destroy(d);
 
         cs_edet_config_default(&cfg);
+        cfg.family = CS_FAMILY_BOUNDED;
+        cfg.side = CS_SIDE_UPPER;
+        cfg.mu0 = 0.5;
+        cfg.threshold = 1.0e12;
+        d = cs_edet_create(&cfg);
+        cs_edet_step_batch(d, zs, N, bstats, NULL, &r);
+        printf("bounded_1s_final %.17g\n", r.stat);
+        cs_edet_destroy(d);
+
+        cs_edet_config_default(&cfg);
         cfg.family = CS_FAMILY_SYMMETRY;
+        cfg.side = CS_SIDE_TWO_SIDED;
         cfg.mu0 = 0.0;
         cfg.threshold = 1.0e12;
         d = cs_edet_create(&cfg);
-        cs_edet_step_batch(d, xs, N, NULL, NULL, &r);
+        cs_edet_step_batch(d, xs, N, bstats, NULL, &r);
+        printf("symmetry_2s_mid %.17g\n", bstats[250]);
         printf("symmetry_final %.17g\n", r.stat);
+        cs_edet_destroy(d);
+
+        cs_edet_config_default(&cfg);
+        cfg.family = CS_FAMILY_SYMMETRY;
+        cfg.side = CS_SIDE_UPPER;
+        cfg.mu0 = 0.0;
+        cfg.threshold = 1.0e12;
+        d = cs_edet_create(&cfg);
+        cs_edet_step_batch(d, xs, N, bstats, NULL, &r);
+        printf("symmetry_1s_final %.17g\n", r.stat);
         cs_edet_destroy(d);
 
         cs_edet_config_default(&cfg);
@@ -83,9 +109,36 @@ int main(void) {
         cfg.threshold = 1.0e12;
         cfg.seed = 999ULL;
         d = cs_edet_create(&cfg);
-        cs_edet_step_batch(d, xs, N, NULL, NULL, &r);
+        cs_edet_step_batch(d, xs, N, bstats, NULL, &r);
+        printf("rank_mid %.17g\n", bstats[250]);
         printf("rank_final %.17g\n", r.stat);
         cs_edet_destroy(d);
+    }
+
+    /* 3b. Swing PLA batch & COMA batch parity */
+    {
+        cs_digest_config_t dcfg;
+        cs_digest_config_default(&dcfg);
+        dcfg.epsilon = 0.05;
+        cs_digest_t *dig = cs_digest_create(&dcfg);
+        double ts[500], rec[500];
+        for (size_t i = 0; i < N; ++i) ts[i] = (double)i;
+        cs_digest_push_batch(dig, ts, ys, NULL, NULL, NULL, NULL, N, NULL, NULL);
+        cs_digest_reconstruct(dig, ts, N, rec);
+        printf("digest_segs %.17g\n", (double)cs_digest_segment_count(dig));
+        printf("digest_rec_250 %.17g\n", rec[250]);
+        printf("digest_rec_499 %.17g\n", rec[499]);
+        cs_digest_destroy(dig);
+
+        double lo_m[80], hi_m[80], hlo[10], hhi[10], agree[10];
+        for (size_t i = 0; i < 80U; ++i) {
+            lo_m[i] = xs[i] - 1.5;
+            hi_m[i] = xs[i] + 1.5 + 0.1 * zs[i];
+        }
+        cs_coma_merge_batch(lo_m, hi_m, NULL, false, 10U, 8U, 0.5, false, NULL, hlo, hhi, agree, NULL, NULL);
+        printf("coma_hlo_9 %.17g\n", hlo[9]);
+        printf("coma_hhi_9 %.17g\n", hhi[9]);
+        printf("coma_agree_9 %.17g\n", agree[9]);
     }
 
     /* 4. Multi-channel Conformal PID SoA (19 channels: tests SIMD + scalar tail + vtan) */

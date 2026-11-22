@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" width="960" height="470" role="img" aria-label="ChronoSieve v0.2.0 Streaming Throughput vs Rust river &amp; Pure Python">
+  <title>ChronoSieve v0.2.0 Streaming Throughput vs Rust river &amp; Pure Python</title>
+  <desc>Log-scale throughput comparison on Apple M4 arm64 (median of 5 runs).</desc>
+  <rect x="0.5" y="0.5" width="959" height="469" rx="12" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="28" y="38" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="16.5" font-weight="700">Streaming Throughput: ChronoSieve C11/NEON vs. Rust river</text>
+  <text x="28" y="60" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12">Apple M4 (arm64 NEON) · Median of 5 runs · Zero-copy Py_buffer batch · Log10 scale (higher is faster)</text>
+  <rect x="688" y="22" width="108" height="24" rx="12" fill="#161b22" stroke="#38bdf8" stroke-width="1"/>
+  <text x="742.0" y="38" text-anchor="middle" fill="#38bdf8" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="600">14.8x vs ADWIN</text>
+  <rect x="806" y="22" width="134" height="24" rx="12" fill="#161b22" stroke="#34d399" stroke-width="1"/>
+  <text x="873.0" y="38" text-anchor="middle" fill="#34d399" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="600">55x vs PageHinkley</text>
+  <line x1="315.0" y1="84" x2="315.0" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="315.0" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">1k/s</text>
+  <line x1="389.2" y1="84" x2="389.2" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="389.2" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">10k/s</text>
+  <line x1="463.3" y1="84" x2="463.3" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="463.3" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">100k/s</text>
+  <line x1="537.5" y1="84" x2="537.5" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="537.5" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">1M/s</text>
+  <line x1="611.7" y1="84" x2="611.7" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="611.7" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">10M/s</text>
+  <line x1="685.8" y1="84" x2="685.8" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="685.8" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">100M/s</text>
+  <line x1="760.0" y1="84" x2="760.0" y2="426" stroke="#21262d" stroke-width="1"/>
+  <text x="760.0" y="442" text-anchor="middle" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="10.5">1B/s</text>
+  <text x="303" y="106" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600">ChronoSieve Conformal PID SoA (64-ch NEON)</text>
+  <rect x="315" y="92" width="432.3" height="20" rx="4" fill="#38bdf8"/>
+  <text x="755.3" y="106" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">673.9M/s (1.48 ns/ch-tk)</text>
+  <text x="303" y="139" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600">ChronoSieve Bounded E-SR (16-lane NEON)</text>
+  <rect x="315" y="125" width="422.1" height="20" rx="4" fill="#38bdf8"/>
+  <text x="745.1" y="139" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">491.6M/s (2.03 ns/tick)</text>
+  <text x="303" y="172" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600">ChronoSieve Swing PLA + RingBuf (NEON)</text>
+  <rect x="315" y="158" width="415.8" height="20" rx="4" fill="#34d399"/>
+  <text x="738.8" y="172" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">404.4M/s (2.47 ns/tick)</text>
+  <text x="303" y="205" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600">ChronoSieve Catoni E-SR (16-lane NEON)</text>
+  <rect x="315" y="191" width="399.9" height="20" rx="4" fill="#38bdf8"/>
+  <text x="722.9" y="205" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">246.5M/s (4.06 ns/tick)</text>
+  <text x="303" y="238" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600">ChronoSieve Symmetry E-SR (16-lane NEON)</text>
+  <rect x="315" y="224" width="395.7" height="20" rx="4" fill="#38bdf8"/>
+  <text x="718.7" y="238" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">216.2M/s (4.63 ns/tick)</text>
+  <text x="303" y="271" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="400">river.ADWIN (Rust-backed v0.27.0)</text>
+  <rect x="315" y="257" width="313.0" height="20" rx="4" fill="#fbbf24"/>
+  <text x="636.0" y="271" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">16.58M/s (60.32 ns/tick)</text>
+  <text x="303" y="304" text-anchor="end" fill="#f0f6fc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="600">ChronoSieve Vovk Rank B-Tree (65k cap)</text>
+  <rect x="315" y="290" width="311.5" height="20" rx="4" fill="#2dd4bf"/>
+  <text x="634.5" y="304" fill="#f0f6fc" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">15.83M/s (63.15 ns/tick)</text>
+  <text x="303" y="337" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="400">river.PageHinkley (Rust-backed v0.27.0)</text>
+  <rect x="315" y="323" width="271.0" height="20" rx="4" fill="#fbbf24"/>
+  <text x="594.0" y="337" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">4.50M/s (222 ns/tick)</text>
+  <text x="303" y="370" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="400">Pure Python Catoni E-SR (reference)</text>
+  <rect x="315" y="356" width="224.2" height="20" rx="4" fill="#64748b"/>
+  <text x="547.2" y="370" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">1.05M/s (948 ns/tick)</text>
+  <text x="303" y="403" text-anchor="end" fill="#c9d1d9" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="400">river.KSWIN (nonparametric v0.27.0)</text>
+  <rect x="315" y="389" width="59.4" height="20" rx="4" fill="#f87171"/>
+  <text x="382.4" y="403" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace" font-size="11">6.3k/s (158.1 us/tick)</text>
+  <text x="28" y="456" fill="#8b949e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10.5">Note: Nonparametric Vovk Rank B-Tree is 2,530x faster than river.KSWIN. CPython per-tick scalar det.step() is 331 ns/tick (dict allocation overhead vs. 4.06 ns batch).</text>
+</svg>

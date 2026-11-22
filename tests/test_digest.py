@@ -148,3 +148,23 @@ def test_wakeup_gate_burst_cooldown_and_markdown_size() -> None:
         cs.StreamDigest(wake_cooldown=-5)
     with pytest.raises(RuntimeError):
         cs.StreamDigest.__new__(cs.StreamDigest).format_markdown()
+
+    # Extreme tiny dt (1e-290) + large eps (1e20): SIMD batch must match scalar push() exactly
+    # without letting (dy +/- eps) / dt overflow to +/-inf and bypass finite-slope checks.
+    ts_tiny = np.array([0.0, 1e-290, 2e-290, 3e-290], dtype=np.float64)
+    ys_tiny = np.zeros(4, dtype=np.float64)
+    d_tseq = cs.StreamDigest(epsilon=1e20)
+    for tv, yv in zip(ts_tiny, ys_tiny, strict=True):
+        d_tseq.push(float(tv), float(yv))
+    d_tbat = cs.StreamDigest(epsilon=1e20)
+    d_tbat.digest_batch(ts_tiny, ys_tiny)
+    assert d_tbat.segment_count == d_tseq.segment_count == 4
+
+    # Mid-batch non-monotonic timestamp raises ValueError & commits exact valid prefix
+    d_nm = cs.StreamDigest(epsilon=0.05)
+    with pytest.raises(ValueError):
+        d_nm.digest_batch(
+            np.array([0.0, 1.0, 2.0, 3.0, 4.0, 3.5, 5.0], dtype=np.float64),
+            np.zeros(7, dtype=np.float64),
+        )
+    assert d_nm.ring_size == 5

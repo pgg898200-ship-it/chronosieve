@@ -75,3 +75,59 @@ jobs:
       - name: Lint C11 + Python (ruff + mypy)
         run: |
           make lint
+
+  build-and-test-windows:
+    name: Windows x86_64 (MSVC AVX2)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install dev/test tools
+        run: |
+          python -m pip install --upgrade pip setuptools pytest numpy ruff mypy
+
+      - name: Build native C11 CLI (MSVC AVX2) & verify <150 KB
+        shell: cmd
+        run: |
+          cl /nologo /std:c11 /O2 /MD /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Icsrc csrc\edetector.c csrc\conformal.c csrc\fuser.c csrc\digest.c csrc\cli_main.c /Fe:chronosieve.exe /link /OPT:REF /OPT:ICF
+          chronosieve.exe info
+          python -c "import os; sz = os.path.getsize('chronosieve.exe'); print(f'Native CLI size: {sz} bytes'); assert sz < 153600, sz"
+
+      - name: Run C11 Core Tests & AVX2 vs Scalar Parity (MSVC)
+        shell: cmd
+        run: |
+          cl /nologo /std:c11 /O2 /MD /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Icsrc csrc\edetector.c csrc\conformal.c csrc\fuser.c csrc\digest.c tests\c\test_c_core.c /Fe:test_c_avx2.exe
+          test_c_avx2.exe
+          cl /nologo /std:c11 /O2 /MD /DCS_FORCE_SCALAR=1 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Icsrc csrc\edetector.c csrc\conformal.c csrc\fuser.c csrc\digest.c tests\c\test_c_core.c /Fe:test_c_scalar.exe
+          test_c_scalar.exe
+          cl /nologo /std:c11 /O2 /MD /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Icsrc csrc\edetector.c csrc\conformal.c csrc\fuser.c csrc\digest.c tests\c\test_parity.c /Fe:parity_avx2.exe
+          cl /nologo /std:c11 /O2 /MD /DCS_FORCE_SCALAR=1 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Icsrc csrc\edetector.c csrc\conformal.c csrc\fuser.c csrc\digest.c tests\c\test_parity.c /Fe:parity_scalar.exe
+          parity_avx2.exe > parity_avx2.txt
+          parity_scalar.exe > parity_scalar.txt
+          python tests\c\check_parity.py parity_avx2.txt parity_scalar.txt
+          del /q test_c_avx2.exe test_c_scalar.exe parity_avx2.exe parity_scalar.exe parity_avx2.txt parity_scalar.txt *.obj
+
+      - name: Build and install Python C-extension (MSVC AVX2)
+        env:
+          CHRONOSIEVE_AVX2: "1"
+        run: |
+          python -m pip install --no-build-isolation --no-deps -e .
+          python -c "import chronosieve as cs; b = cs.simd_backend(); print('Backend:', b); assert b == 'AVX2'"
+
+      - name: Run full pytest suite (Math proofs + MCP stdio + CLI)
+        run: |
+          pytest -v tests/
+
+      - name: Lint Python (ruff + mypy)
+        run: |
+          ruff check python/ tests/ benchmarks/ examples/ scripts/ setup.py
+          mypy python/chronosieve

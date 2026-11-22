@@ -33,32 +33,37 @@ def main() -> None:
     edet_matches = re.findall(r"E=([0-9.]+)/([0-9.]+)", ev["digest_markdown"])
     digest_shows_shift = any(float(s) >= float(thr) for s, thr in edet_matches)
 
+    llm_eval_bundle = {
+        "ground_truth": ev["ground_truth"],
+        "wake_count": ev["wake_count"],
+        "wake_ticks": ev["wake_ticks"],
+        "shift_ticks": ev["shift_ticks"],
+        "rogue_flags": ev["rogue_flags"],
+        "prompt_chars": ev["prompt_chars"],
+        "prompt_est_tokens": ev["prompt_est_tokens"],
+        "prompt_bpe_proxy_tokens": ev["prompt_bpe_proxy_tokens"],
+        "raw_json_chars_div_4": ev["raw_json_chars_div_4"],
+        "raw_json_bpe_proxy_tokens": ev["raw_json_bpe_proxy_tokens"],
+        "prompt_vs_raw_json_bpe_reduction_pct": ev["prompt_vs_raw_json_bpe_reduction_pct"],
+        "prompt_vs_raw_json_chars4_reduction_pct": ev["prompt_vs_raw_json_chars4_reduction_pct"],
+        "digest_captures_ground_truth": (
+            "t=180.00" in ev["digest_markdown"]
+            and "95.5" in ev["digest_markdown"]
+            and "180.00..180.00: 95.5->95.5" in ev["digest_markdown"]
+            and "rogue=agent_2" in ev["digest_markdown"]
+            and digest_shows_shift
+            and any(150 <= s <= 170 for s in ev["shift_ticks"])
+        ),
+    }
+    for opt_k in ("prompt_tiktoken", "raw_json_tiktoken", "prompt_vs_raw_json_o200k_reduction_pct"):
+        if opt_k in ev:
+            llm_eval_bundle[opt_k] = ev[opt_k]
+
     bundle = {
         "throughput": tp,
         "math_proofs": mp,
         "tokens": tk,
-        "llm_eval_dry_run": {
-            "ground_truth": ev["ground_truth"],
-            "wake_count": ev["wake_count"],
-            "wake_ticks": ev["wake_ticks"],
-            "shift_ticks": ev["shift_ticks"],
-            "rogue_flags": ev["rogue_flags"],
-            "prompt_chars": ev["prompt_chars"],
-            "prompt_est_tokens": ev["prompt_est_tokens"],
-            "prompt_bpe_proxy_tokens": ev["prompt_bpe_proxy_tokens"],
-            "raw_json_chars_div_4": ev["raw_json_chars_div_4"],
-            "raw_json_bpe_proxy_tokens": ev["raw_json_bpe_proxy_tokens"],
-            "prompt_vs_raw_json_bpe_reduction_pct": ev["prompt_vs_raw_json_bpe_reduction_pct"],
-            "prompt_vs_raw_json_chars4_reduction_pct": ev["prompt_vs_raw_json_chars4_reduction_pct"],
-            "digest_captures_ground_truth": (
-                "t=180.00" in ev["digest_markdown"]
-                and "95.5" in ev["digest_markdown"]
-                and "180.00..180.00: 95.5->95.5" in ev["digest_markdown"]
-                and "rogue=agent_2" in ev["digest_markdown"]
-                and digest_shows_shift
-                and any(150 <= s <= 170 for s in ev["shift_ticks"])
-            ),
-        },
+        "llm_eval_dry_run": llm_eval_bundle,
     }
 
     out_path = BENCH_DIR / "results_m4.json"

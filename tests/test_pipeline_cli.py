@@ -9,6 +9,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -16,7 +17,7 @@ import chronosieve as cs
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
-CLI_BIN = ROOT / "chronosieve"
+CLI_BIN = ROOT / ("chronosieve.exe" if sys.platform == "win32" else "chronosieve")
 
 
 def test_unified_pipeline_end_to_end() -> None:
@@ -103,7 +104,7 @@ def test_native_cli_binary_size_and_subcommands() -> None:
 
     # 1. info
     p_info = subprocess.run([str(CLI_BIN), "info"], capture_output=True, text=True, check=True)
-    assert "chronosieve 0.1.0" in p_info.stdout
+    assert "chronosieve 0.2.0" in p_info.stdout
 
     # 2. detect --json on shifted stream
     stream = "\n".join(["0.0"] * 50 + ["3.0"] * 50) + "\n"

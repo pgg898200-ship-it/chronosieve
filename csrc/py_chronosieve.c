@@ -16,6 +16,9 @@ typedef struct {
     Py_buffer view;
     double *data;
     size_t len;
+    int ndim;
+    size_t shape0;
+    size_t shape1;
     bool has_view;
     bool owns_malloc;
 } cs_py_f64_buf_t;
@@ -120,12 +123,18 @@ static bool cs_fmt_is_u32(const char *fmt, Py_ssize_t itemsize) {
     }
     if (strcmp(fmt, "I") == 0 || strcmp(fmt, "i") == 0 ||
         strcmp(fmt, "=I") == 0 || strcmp(fmt, "=i") == 0 ||
-        strcmp(fmt, "@I") == 0 || strcmp(fmt, "@i") == 0 ||
-        (sizeof(unsigned long) == 4 && strcmp(fmt, "L") == 0)) {
+        strcmp(fmt, "@I") == 0 || strcmp(fmt, "@i") == 0) {
+        return true;
+    }
+    if (sizeof(unsigned long) == 4 &&
+        (strcmp(fmt, "L") == 0 || strcmp(fmt, "l") == 0 ||
+         strcmp(fmt, "=L") == 0 || strcmp(fmt, "=l") == 0 ||
+         strcmp(fmt, "@L") == 0 || strcmp(fmt, "@l") == 0)) {
         return true;
     }
 #if CS_IS_LITTLE_ENDIAN
-    if (strcmp(fmt, "<I") == 0 || strcmp(fmt, "<i") == 0) {
+    if (strcmp(fmt, "<I") == 0 || strcmp(fmt, "<i") == 0 ||
+        (sizeof(unsigned long) == 4 && (strcmp(fmt, "<L") == 0 || strcmp(fmt, "<l") == 0))) {
         return true;
     }
 #endif
@@ -150,6 +159,13 @@ static int cs_py_acquire_f64_ro(PyObject *obj, cs_py_f64_buf_t *out) {
                 out->has_view = true;
                 out->data = (double *)out->view.buf;
                 out->len = (size_t)(out->view.len / (Py_ssize_t)sizeof(double));
+                out->ndim = out->view.ndim;
+                if (out->view.ndim >= 1 && out->view.shape) {
+                    out->shape0 = (size_t)out->view.shape[0];
+                    if (out->view.ndim >= 2) {
+                        out->shape1 = (size_t)out->view.shape[1];
+                    }
+                }
                 return 0;
             }
             PyBuffer_Release(&out->view);
@@ -159,6 +175,13 @@ static int cs_py_acquire_f64_ro(PyObject *obj, cs_py_f64_buf_t *out) {
             if (PyObject_GetBuffer(obj, &sview, PyBUF_FORMAT | PyBUF_STRIDES) == 0) {
                 if (cs_fmt_is_f64(sview.format, sview.itemsize)) {
                     size_t n = (size_t)(sview.len / (Py_ssize_t)sizeof(double));
+                    out->ndim = sview.ndim;
+                    if (sview.ndim >= 1 && sview.shape) {
+                        out->shape0 = (size_t)sview.shape[0];
+                        if (sview.ndim >= 2) {
+                            out->shape1 = (size_t)sview.shape[1];
+                        }
+                    }
                     if (n == 0U) {
                         PyBuffer_Release(&sview);
                         return 0;
@@ -415,6 +438,28 @@ static int cs_py_acquire_u32_ro(PyObject *obj, cs_py_u32_buf_t *out) {
     out->data = buf;
     out->len = (size_t)n;
     out->owns_malloc = true;
+    return 0;
+}
+
+static int cs_py_acquire_u32_rw(PyObject *obj, size_t expected_len, cs_py_u32_buf_t *out) {
+    memset(out, 0, sizeof(*out));
+    if (PyObject_GetBuffer(obj, &out->view, PyBUF_WRITABLE | PyBUF_FORMAT | PyBUF_C_CONTIGUOUS) != 0) {
+        return -1;
+    }
+    if (!cs_fmt_is_u32(out->view.format, out->view.itemsize)) {
+        PyBuffer_Release(&out->view);
+        PyErr_SetString(PyExc_TypeError, "output buffer must be C-contiguous uint32/int32 ('I'/'i')");
+        return -1;
+    }
+    size_t len = (size_t)(out->view.len / 4);
+    if (len < expected_len) {
+        PyBuffer_Release(&out->view);
+        PyErr_Format(PyExc_ValueError, "output uint32 buffer too small (%zu < %zu)", len, expected_len);
+        return -1;
+    }
+    out->has_view = true;
+    out->data = (uint32_t *)out->view.buf;
+    out->len = len;
     return 0;
 }
 
@@ -1319,7 +1364,7 @@ static int PySleepingBOA_init(PySleepingBOAObject *self, PyObject *args, PyObjec
     static char *kwlist[] = {
         "n_agents", "share_base", "share_shift", "shift_var_decay",
         "rogue_threshold", "rogue_mu0", "rogue_sigma", "cal_window",
-        "use_abs_loss", "quarantine_rogue", NULL
+        "use_abs_loss", "quarantine_rogue", "peer_relative_rogue", NULL
     };
     Py_ssize_t n_agents = 0;
     double share_base = 0.01;
@@ -1331,12 +1376,13 @@ static int PySleepingBOA_init(PySleepingBOAObject *self, PyObject *args, PyObjec
     long long cal_window_ll = 48LL;
     int use_abs_loss = 0;
     int quarantine_rogue = 1;
+    int peer_relative_rogue = 1;
 
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwds, "n|ddddddLpp", kwlist,
+            args, kwds, "n|ddddddLppp", kwlist,
             &n_agents, &share_base, &share_shift, &shift_var_decay,
             &rogue_threshold, &rogue_mu0, &rogue_sigma, &cal_window_ll,
-            &use_abs_loss, &quarantine_rogue)) {
+            &use_abs_loss, &quarantine_rogue, &peer_relative_rogue)) {
         return -1;
     }
     if (n_agents <= 0) {
@@ -1357,6 +1403,7 @@ static int PySleepingBOA_init(PySleepingBOAObject *self, PyObject *args, PyObjec
     cfg.rogue_sigma = rogue_sigma;
     cfg.use_abs_loss = (use_abs_loss != 0);
     cfg.quarantine_rogue = (quarantine_rogue != 0);
+    cfg.peer_relative_rogue = (peer_relative_rogue != 0);
 
     cs_fuser_t *new_fus = cs_fuser_create(&cfg);
     if (!new_fus) {
@@ -2210,12 +2257,16 @@ static PyObject *py_coma_merge(PyObject *Py_UNUSED(self), PyObject *args, PyObje
     }
 
     size_t k = lo.len;
-    cs_interval_t *ivs = (cs_interval_t *)malloc(k * sizeof(*ivs));
-    if (!ivs) {
-        cs_py_f64_release(&w);
-        cs_py_f64_release(&hi);
-        cs_py_f64_release(&lo);
-        return PyErr_NoMemory();
+    cs_interval_t stack_ivs[64];
+    cs_interval_t *ivs = stack_ivs;
+    if (k > 64U) {
+        ivs = (cs_interval_t *)malloc(k * sizeof(*ivs));
+        if (!ivs) {
+            cs_py_f64_release(&w);
+            cs_py_f64_release(&hi);
+            cs_py_f64_release(&lo);
+            return PyErr_NoMemory();
+        }
     }
 
     uint64_t rng_state = (uint64_t)seed;
@@ -2230,26 +2281,26 @@ static PyObject *py_coma_merge(PyObject *Py_UNUSED(self), PyObject *args, PyObje
     cs_py_f64_release(&lo);
 
     if (st != CS_OK) {
-        free(ivs);
+        if (ivs != stack_ivs) free(ivs);
         cs_set_py_error(st, "coma_merge");
         return NULL;
     }
 
     PyObject *iv_list = PyList_New((Py_ssize_t)res.n_intervals);
     if (!iv_list) {
-        free(ivs);
+        if (ivs != stack_ivs) free(ivs);
         return NULL;
     }
     for (size_t i = 0; i < res.n_intervals; ++i) {
         PyObject *tup = Py_BuildValue("(dd)", ivs[i].lo, ivs[i].hi);
         if (!tup) {
             Py_DECREF(iv_list);
-            free(ivs);
+            if (ivs != stack_ivs) free(ivs);
             return NULL;
         }
         PyList_SET_ITEM(iv_list, (Py_ssize_t)i, tup);
     }
-    free(ivs);
+    if (ivs != stack_ivs) free(ivs);
 
     PyObject *hull = NULL;
     if (res.n_intervals > 0U) {
@@ -2274,6 +2325,193 @@ static PyObject *py_coma_merge(PyObject *Py_UNUSED(self), PyObject *args, PyObje
     return out;
 }
 
+static PyObject *py_coma_merge_batch(PyObject *Py_UNUSED(self), PyObject *args, PyObject *kwds) {
+    static char *kwlist[] = {
+        "lowers_2d", "uppers_2d", "weights_2d", "n_agents",
+        "tau", "randomized", "seed",
+        "out_hull_lo", "out_hull_hi", "out_max_agreement", "out_n_intervals",
+        NULL
+    };
+    PyObject *lo_obj = NULL, *hi_obj = NULL, *w_obj = Py_None;
+    Py_ssize_t n_agents_arg = 0;
+    double tau = 0.5;
+    int randomized = 0;
+    unsigned long long seed = 0x243f6a8885a308d3ULL;
+    PyObject *olo_obj = Py_None, *ohi_obj = Py_None, *oag_obj = Py_None, *oniv_obj = Py_None;
+
+    if (!PyArg_ParseTupleAndKeywords(
+            args, kwds, "OO|OndpKOOOO", kwlist,
+            &lo_obj, &hi_obj, &w_obj, &n_agents_arg,
+            &tau, &randomized, &seed,
+            &olo_obj, &ohi_obj, &oag_obj, &oniv_obj)) {
+        return NULL;
+    }
+    if (n_agents_arg < 0) {
+        PyErr_SetString(PyExc_ValueError, "n_agents must be >= 0");
+        return NULL;
+    }
+
+    cs_py_f64_buf_t lo, hi, w, olo, ohi, oag;
+    cs_py_u32_buf_t oniv;
+    memset(&lo, 0, sizeof(lo));
+    memset(&hi, 0, sizeof(hi));
+    memset(&w, 0, sizeof(w));
+    memset(&olo, 0, sizeof(olo));
+    memset(&ohi, 0, sizeof(ohi));
+    memset(&oag, 0, sizeof(oag));
+    memset(&oniv, 0, sizeof(oniv));
+
+    if (cs_py_acquire_f64_ro(lo_obj, &lo) != 0) goto fail;
+    if (cs_py_acquire_f64_ro(hi_obj, &hi) != 0) goto fail;
+    if (lo.len != hi.len) {
+        PyErr_SetString(PyExc_ValueError, "lowers_2d and uppers_2d must have identical total length");
+        goto fail;
+    }
+
+    if (lo.ndim > 2 || hi.ndim > 2) {
+        PyErr_SetString(PyExc_ValueError, "lowers_2d and uppers_2d must be 1D or 2D");
+        goto fail;
+    }
+
+    size_t n_steps = 0U;
+    size_t k = 0U;
+    if (lo.ndim == 2) {
+        n_steps = lo.shape0;
+        k = lo.shape1;
+        if (hi.ndim == 2 && (hi.shape0 != n_steps || hi.shape1 != k)) {
+            PyErr_SetString(PyExc_ValueError, "lowers_2d and uppers_2d shapes must match");
+            goto fail;
+        }
+        if (n_agents_arg > 0 && (size_t)n_agents_arg != k) {
+            PyErr_SetString(PyExc_ValueError, "n_agents does not match lowers_2d second dimension");
+            goto fail;
+        }
+        if (k == 0U) {
+            PyErr_SetString(PyExc_ValueError, "lowers_2d must have n_agents > 0");
+            goto fail;
+        }
+    } else if (hi.ndim == 2) {
+        n_steps = hi.shape0;
+        k = hi.shape1;
+        if (n_agents_arg > 0 && (size_t)n_agents_arg != k) {
+            PyErr_SetString(PyExc_ValueError, "n_agents does not match uppers_2d second dimension");
+            goto fail;
+        }
+        if (k == 0U) {
+            PyErr_SetString(PyExc_ValueError, "uppers_2d must have n_agents > 0");
+            goto fail;
+        }
+    } else {
+        if (n_agents_arg <= 0) {
+            PyErr_SetString(PyExc_ValueError, "n_agents > 0 is required for 1D flat buffers");
+            goto fail;
+        }
+        k = (size_t)n_agents_arg;
+        if (lo.len % k != 0U) {
+            PyErr_SetString(PyExc_ValueError, "lowers_2d length must be divisible by n_agents");
+            goto fail;
+        }
+        n_steps = lo.len / k;
+    }
+
+    bool weights_per_step = false;
+    if (w_obj != Py_None) {
+        if (cs_py_acquire_f64_ro(w_obj, &w) != 0) goto fail;
+        if (w.ndim > 2) {
+            PyErr_SetString(PyExc_ValueError, "weights_2d must be 1D or 2D");
+            goto fail;
+        }
+        if (w.ndim == 2) {
+            if (w.shape0 == n_steps && w.shape1 == k) {
+                weights_per_step = (n_steps > 1U);
+            } else if (w.shape0 == 1U && w.shape1 == k) {
+                weights_per_step = false;
+            } else {
+                PyErr_SetString(
+                    PyExc_ValueError,
+                    "2D weights_2d must have shape (n_steps, n_agents) or (1, n_agents)");
+                goto fail;
+            }
+        } else {
+            if (w.len == k) {
+                weights_per_step = false;
+            } else if (w.len == n_steps * k) {
+                weights_per_step = (n_steps > 1U);
+            } else {
+                PyErr_SetString(
+                    PyExc_ValueError,
+                    "weights_2d must have length n_agents or n_steps * n_agents");
+                goto fail;
+            }
+        }
+    }
+
+    if (olo_obj != Py_None && cs_py_acquire_f64_rw(olo_obj, n_steps, &olo) != 0) goto fail;
+    if (ohi_obj != Py_None && cs_py_acquire_f64_rw(ohi_obj, n_steps, &ohi) != 0) goto fail;
+    if (oag_obj != Py_None && cs_py_acquire_f64_rw(oag_obj, n_steps, &oag) != 0) goto fail;
+    if (oniv_obj != Py_None && cs_py_acquire_u32_rw(oniv_obj, n_steps, &oniv) != 0) goto fail;
+
+    uint64_t rng_state = (uint64_t)seed;
+    cs_coma_result_t last;
+    memset(&last, 0, sizeof(last));
+    cs_status_t st;
+
+    Py_BEGIN_ALLOW_THREADS
+    st = cs_coma_merge_batch(
+        lo.data, hi.data,
+        w_obj != Py_None ? w.data : NULL,
+        weights_per_step,
+        n_steps, k,
+        tau, randomized != 0,
+        randomized ? &rng_state : NULL,
+        olo.data, ohi.data, oag.data, oniv.data,
+        &last);
+    Py_END_ALLOW_THREADS
+
+    cs_py_u32_release(&oniv);
+    cs_py_f64_release(&oag);
+    cs_py_f64_release(&ohi);
+    cs_py_f64_release(&olo);
+    cs_py_f64_release(&w);
+    cs_py_f64_release(&hi);
+    cs_py_f64_release(&lo);
+
+    if (st != CS_OK) {
+        cs_set_py_error(st, "coma_merge_batch");
+        return NULL;
+    }
+
+    PyObject *hull = NULL;
+    if (last.n_intervals > 0U) {
+        hull = Py_BuildValue("(dd)", last.hull_lo, last.hull_hi);
+        if (!hull) return NULL;
+    } else {
+        Py_INCREF(Py_None);
+        hull = Py_None;
+    }
+
+    PyObject *out = Py_BuildValue(
+        "{s:n,s:n,s:O,s:d,s:n,s:d}",
+        "n_steps", (Py_ssize_t)n_steps,
+        "n_agents", (Py_ssize_t)k,
+        "last_hull", hull,
+        "last_max_agreement", last.max_agreement,
+        "last_n_intervals", (Py_ssize_t)last.n_intervals,
+        "last_used_tau", last.used_tau);
+    Py_DECREF(hull);
+    return out;
+
+fail:
+    cs_py_u32_release(&oniv);
+    cs_py_f64_release(&oag);
+    cs_py_f64_release(&ohi);
+    cs_py_f64_release(&olo);
+    cs_py_f64_release(&w);
+    cs_py_f64_release(&hi);
+    cs_py_f64_release(&lo);
+    return NULL;
+}
+
 static PyObject *py_version(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(ignored)) {
     return PyUnicode_FromString(cs_version_string());
 }
@@ -2285,6 +2523,8 @@ static PyObject *py_simd_backend(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(
 static PyMethodDef core_methods[] = {
     {"coma_merge", (PyCFunction)(void (*)(void))py_coma_merge, METH_VARARGS | METH_KEYWORDS,
      "O(K log K) COMA weighted majority-vote interval consensus (Gasparin & Ramdas UAI 2024)."},
+    {"coma_merge_batch", (PyCFunction)(void (*)(void))py_coma_merge_batch, METH_VARARGS | METH_KEYWORDS,
+     "Zero-copy GIL-free batch COMA interval consensus over (T, K) buffers."},
     {"version", py_version, METH_NOARGS, "Return ChronoSieve C core version string."},
     {"simd_backend", py_simd_backend, METH_NOARGS, "Return compiled SIMD backend name."},
     {NULL, NULL, 0, NULL}

@@ -14,7 +14,7 @@ extern "C" {
  * ========================================================================= */
 
 #define CS_VERSION_MAJOR 0
-#define CS_VERSION_MINOR 1
+#define CS_VERSION_MINOR 2
 #define CS_VERSION_PATCH 0
 
 #define CS_EDET_LANES 16U
@@ -271,6 +271,24 @@ cs_status_t cs_coma_merge(
     size_t max_intervals,
     cs_coma_result_t *out_res);
 
+/* Zero-allocation batch COMA across T steps x K agents (row-major [T x K]).
+ * If weights_mat is non-NULL: [T x K] when weights_per_step == true, else shared [K]. */
+cs_status_t cs_coma_merge_batch(
+    const double *lowers_mat,
+    const double *uppers_mat,
+    const double *weights_mat,
+    bool weights_per_step,
+    size_t n_steps,
+    size_t k,
+    double tau,
+    bool randomized,
+    uint64_t *rng_state,
+    double *out_hull_lo,       /* optional, length T (NaN if empty) */
+    double *out_hull_hi,       /* optional, length T (NaN if empty) */
+    double *out_max_agreement, /* optional, length T */
+    uint32_t *out_n_intervals, /* optional, length T */
+    cs_coma_result_t *last_out /* optional */);
+
 /* =========================================================================
  * Module 3: NEON Sleeping Fixed-Share BOA + Per-Agent Drift Attribution
  * ========================================================================= */
@@ -286,6 +304,7 @@ typedef struct {
     uint32_t cal_window;      /* Per-agent warmup ticks for auto-calibration (default 48) */
     bool use_abs_loss;        /* false -> squared loss (default), true -> absolute loss */
     bool quarantine_rogue;    /* If true, zero out active weight of flagged rogue agents if peers exist */
+    bool peer_relative_rogue; /* If true (default), monitor max(0, |y-p_k| - median_j |y-p_j|) when active_cnt >= 3 */
 } cs_fuser_config_t;
 
 typedef struct {

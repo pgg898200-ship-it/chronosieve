@@ -18,18 +18,19 @@ if os.environ.get("CHRONOSIEVE_FORCE_SCALAR") == "1":
 
 if is_msvc:
     compile_args = ["/std:c11", "/O2", "/W4"]
+    define_macros.append(("_CRT_SECURE_NO_WARNINGS", "1"))
     if os.environ.get("CHRONOSIEVE_AVX2") == "1" and arch in ("amd64", "x86_64"):
         compile_args.append("/arch:AVX2")
 else:
     compile_args = ["-std=c11", "-O3", "-Wall", "-Wextra"]
     libraries = ["m"]
     if arch in ("arm64", "aarch64"):
-        if sys.platform == "darwin":
+        if sys.platform == "darwin" and os.environ.get("CIBUILDWHEEL") != "1":
             compile_args.append("-mcpu=native")
     elif arch in ("x86_64", "amd64"):
         if os.environ.get("CHRONOSIEVE_AVX2") == "1":
             compile_args.extend(["-mavx2", "-mfma"])
-        elif os.environ.get("CHRONOSIEVE_NATIVE") == "1":
+        elif os.environ.get("CHRONOSIEVE_NATIVE") == "1" and os.environ.get("CIBUILDWHEEL") != "1":
             compile_args.append("-march=native")
 
 ext = Extension(
@@ -42,6 +43,11 @@ ext = Extension(
         "csrc/py_chronosieve.c",
     ],
     include_dirs=["include", "csrc"],
+    depends=[
+        "include/chronosieve.h",
+        "csrc/cs_simd.h",
+        "csrc/cs_internal.h",
+    ],
     extra_compile_args=compile_args,
     define_macros=define_macros,
     libraries=libraries,

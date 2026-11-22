@@ -1,100 +1,90 @@
-# ChronoSieve — Launch Copy Drafts
+# ChronoSieve v0.2.0 — Launch Copy Drafts
 
-> All numbers below are verified on Apple M4 (macOS 15.3.2 arm64, Apple Clang 16.0.0, Python 3.14.6, NEON SIMD) via `python3 benchmarks/run_all.py` and stored in `benchmarks/results_m4.json`. Review and publish under your own account.
+> All numbers below are verified on Apple M4 (macOS 15.3.2 arm64, Apple Clang 16.0.0, Python 3.14.6, NEON SIMD, median of 5 runs) via `python3 benchmarks/run_all.py` and `python3 benchmarks/bench_external.py`, stored in `benchmarks/results_m4.json` and `benchmarks/results_external_m4.json`. Review and publish under your own account.
 
 ---
 
 ## 1. Hacker News — Show HN
 
 **Title:**
-`Show HN: ChronoSieve – 101 KB C11/SIMD E-Detectors, Conformal PID & MCP Digest`
+`Show HN: ChronoSieve v0.2 – 118 KB C11/SIMD E-Detectors (15x vs Rust river), Conformal PID & MCP Digest`
 
 **Body:**
 Hi HN,
 
-I built **ChronoSieve**, a zero-dependency C11/SIMD (ARM64 NEON, x86_64 AVX2, scalar) streaming inference and multi-agent digest engine with a zero-copy `Py_buffer` Python C-extension, a 101 KB native CLI, and a zero-dependency stdio MCP server.
+I built **ChronoSieve v0.2.0**, a zero-dependency C11/SIMD (ARM64 NEON, x86_64 AVX2, portable scalar) streaming inference and multi-agent digest engine with a zero-copy `Py_buffer` Python C-extension, a 118 KB standalone CLI, a zero-dependency stdio MCP server, and a Claude Code / Cursor plugin.
 
-The problem I wanted to solve: when running multi-agent or LLM-assisted monitoring over live time-series/telemetry, you either burn tens of thousands of tokens feeding raw JSON/CSV to an LLM, or you stitch together Gaussian drift detectors that break on heavy tails, conformal intervals that lag 150 ticks after volatility shocks, and ad-hoc ensembles that don't handle slow asynchronous LLM agents or hallucinations.
+The problem I wanted to solve: when running multi-agent or LLM-assisted monitoring over live time-series/telemetry, you either burn 120,000+ real `o200k_base` tokens feeding raw JSON/CSV to an LLM, or you stitch together Gaussian drift detectors that collapse on heavy tails, conformal trackers that lag 150 ticks after volatility shocks, and ad-hoc ensembles that falsely quarantine healthy models when an exogenous sensor spike hits.
 
-ChronoSieve fuses four 2023–2026 statistical primitives into one zero-dependency C11 core:
+ChronoSieve fuses four 2023–2026 statistical primitives into one zero-dependency C11/SIMD core:
 
-1. **Zero-`exp` 16-lane SIMD E-Detectors & Cross-Agent E-Fusion**: Algebraic Catoni (Wang & Ramdas 2023), Bounded Betting, Algebraic Symmetry (valid even on infinite-variance Cauchy), and Vovk Growing-Prefix Conformal Rank Betting via an arena-backed $O(\log n)$ B-tree with deterministic epoch resets. Cross-agent E-Fusion keeps $\text{ARL} \ge \gamma$ even across $K=8$ strongly correlated streams ($\rho=0.85$), and zero-prior Vovk Rank detects the historic **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms).
-2. **Pre-Control E-Reset Conformal PID + Online COMA**: Exact Angelopoulos et al. (NeurIPS 2023) Conformal PID with a subtle but critical invariant: the E-detector runs strictly on the exogenous pre-control residual $s_t = |y_t - \hat{y}_t|$ (never closed-loop miscoverage $I_t$), and resets *only* the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ with mandatory $W_{\text{cal}} \ge 32$ warmup. That preserves exact asymptotic $1-\alpha$ coverage while jumping post-5x-shock 100-tick coverage from **39.0%** (pure P+I PID) / **65.0%** (Rolling-D PID) to **85.0%** (and tracking 277 strictly causal out-of-sample years of real **Sunspot** cycles at **90.6%** vs 88.8% Rolling-D / 86.6% pure PID). Also includes a 64-channel SoA NEON kernel and $O(K \log K)$ Online COMA interval consensus (Gasparin & Ramdas, UAI 2024).
-3. **SIMD Sleeping Fixed-Share BOA + Rogue Agent Quarantine**: Zero-regret sleeping-expert imputation (so slow LLM agents can sleep while fast System-1 models run every tick), fast SIMD Estrin `exp` (`<5e-16` err), shift-coupled Fixed-Share mixing, and Bonferroni-safe per-agent Catoni residual detectors that pinpoint and quarantine hallucinating agents.
-4. **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`**: Exact $L_\infty \le \epsilon$ trajectory compression with `0.0`-error verbatim pinning of conformal anomalies, zero LLM tokens while stationary, ~195–200-token (`chars/4`) Markdown wake-up packets on shifts/anomalies, and an $O(\log N)$ circular ring buffer for lossless `zoom(channel, t0, t1)` drill-down via Python, CLI, or MCP.
+1. **Zero-`exp` Register-Resident SIMD E-Detectors & Cross-Agent E-Fusion**: Dedicated NEON & AVX2 batch kernels for Bounded Betting (**491.6M ticks/s**, `2.03 ns`), Algebraic Catoni (Wang & Ramdas 2023; **251.4M ticks/s** `array.array` / **246.5M ticks/s** NumPy, `3.98–4.06 ns`), Algebraic Symmetry (**220.0M ticks/s**, `4.54 ns`, valid even on infinite-variance Cauchy), and Vovk Growing-Prefix Conformal Rank Betting (cache-line-aligned SIMD arena B-tree at **15.8M ticks/s**, `63.2 ns`). Cross-agent E-Fusion keeps $\text{ARL} \ge \gamma$ even across $K=8$ strongly correlated streams ($\rho=0.85$), and zero-prior Vovk Rank detects the historic **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms).
+2. **Pre-Control E-Reset Conformal PID + 674M ch-tk/s SoA + Zero-Copy `coma_merge_batch`**: Exact Angelopoulos et al. (NeurIPS 2023) Conformal PID with a subtle but critical invariant: the E-detector runs strictly on the exogenous pre-control residual $s_t = |y_t - \hat{y}_t|$ (never closed-loop miscoverage $I_t$), and resets *only* the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ with mandatory $W_{\text{cal}} \ge 32$ warmup. Post-5x-shock 100-tick coverage jumps from **39.0%** (pure P+I PID) / **65.0%** (Rolling-D PID) to **85.0%** (and tracks 277 out-of-sample years of real **Sunspots** at **90.6%** vs 88.8% / 86.6%). Includes a 4x-unrolled 64-channel SoA SIMD kernel (**673.9M ch-tk/s**, `1.48 ns`) and zero-`malloc` $O(K \log K)$ Online COMA batch consensus (**7.44M steps/s** CLI / **7.25M steps/s** Python for $K=8$, Gasparin & Ramdas UAI 2024).
+3. **SIMD Sleeping Fixed-Share BOA + Peer-Relative Rogue Quarantine**: Zero-regret sleeping-expert imputation (mixes fast System-1 models with slow asynchronous LLMs), branchless Batcher sorting-network peer-relative excess residual attribution (`excess_k = max(0, |y - p_k| - median_j |y - p_j|)` with 50%-breakdown peer-median calibration floor and `< 3`-agent fallback), and SIMD Estrin `exp` (`<5e-16` err) at **8.79M steps/s** (`113.8 ns/step` Py batch / `115.3 ns/step` CLI for $K=8$). Immune to 86-sigma common exogenous spikes even at default `rogue_threshold=200.0` (**505/505 seeds** exact rogue isolation).
+4. **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`**: Exact ULP-guarded $L_\infty \le \epsilon$ trajectory compression at **470.7M ticks/s** (`2.12 ns`) Native CLI / **404.4M ticks/s** (`2.47 ns`) Python batch, `0.0`-error verbatim anomaly pinning, and an $O(\log N)$ ring buffer for lossless `zoom(channel, t0, t1)` drill-down via Python, CLI, or MCP.
 
-Measured on an Apple M4 (reproducible via `python3 benchmarks/run_all.py`; Native CLI and Python `Py_buffer` batch reported separately):
-- **Catoni E-SR (16-lane NEON)**: **8.82 ns/tick** (113.4M/s) Native CLI | **8.47 ns/tick** (118.1M/s) Python `array.array('d')` | **9.03 ns/tick** (110.7M/s) Python NumPy | **347.8 ns/tick** CPython scalar `step()` (honestly reporting CPython dispatch overhead).
-- **Vovk Rank B-tree (65k cap)**: **114.4 ns/tick** (8.74M/s) Native CLI | **115.5 ns/tick** (8.66M/s) Python batch.
-- **Conformal PID SoA (64ch NEON)**: **2.39 ns/ch-tick** (418.8M ch-tk/s) Native CLI | **2.48 ns/ch-tick** (402.8M ch-tk/s) Python batch.
-- **Swing PLA + Ring Buffer**: **6.17 ns/tick** (162.0M/s) Native CLI | **6.69 ns/tick** (149.5M/s) Python batch.
-- **Real-world Mauna Loa CO2 ($N=2,225, \epsilon=1.0$ ppm, full-series, NO wake gating)**: Native Swing PLA Digest = 107 segments (20.8x PLA, verified exact C $L_\infty = 1.000000 \le 1.00$ ppm; 1.0004 ppm reconstructed from rendered 6-sig-fig Markdown), **91.6% BPE-proxy / 88.3% `chars/4`** reduction vs Raw JSON and **71.9% BPE / 58.2% `chars/4`** beyond TSLN-style delta text.
-- **10k-tick telemetry stream**: **96.3% BPE-proxy / 95.0% `chars/4`** vs Raw JSON (**86.5% BPE / 78.9% `c/4`** beyond TSLN) in gated `burst=2` mode (100% pinned for `zoom()`, 0% 1-tick spike wakes by design); **93.7% BPE / 91.2% `c/4`** vs JSON in high-recall `burst=1` mode (**100%** pinned & wake-packet spike recall).
-- **Correctness**: NEON (`1.14e-15`) and x86_64 AVX2 (`7.85e-16`) vs portable scalar parity (`<1e-12`), zero ASan/UBSan issues across NEON/AVX2/Scalar, and Monte Carlo + `statsmodels` proofs in `tests/` & `benchmarks/`.
+Verified head-to-head on Apple M4 (median of 5 runs, CLI vs Python `Py_buffer` vs scalar `step()` kept strictly separate):
+- **vs. Rust-backed `river 0.27.0` (throughput)**: Catoni batch (`4.07 ns`) is **14.8x faster** than `river.ADWIN` (`60.3 ns`) and **54.6x faster** than `river.PageHinkley` (`222.1 ns`); nonparametric Vovk Rank B-tree (`62.5 ns`) is **2,530x faster** than `river.KSWIN` (`158.1 us`). (For fairness: per-tick CPython `det.step(x)` is `332 ns` due to 8-key dict allocation; batch `ingest_batch()` eliminates that overhead.)
+- **vs. Rust-backed `river 0.27.0` (heavy-tail validity, 60 trials, $H=1000$)**: On Student-$t_3$ $+2.0$ shifts, ChronoSieve detects **2.6–3.0x faster** than `river.ADWIN` (`12.4–14.2` vs `37.3` ticks mean ADD). On Cauchy(0,1), `river.PageHinkley` collapses (**100% FA, ARL 50.1**) while Symmetry & Vovk Rank strictly honor $\text{ARL} \ge 1000$.
+- **Real OpenAI `tiktoken 0.14.0` (`o200k_base`)**:
+  - **Mauna Loa CO2 ($N=2,225, \epsilon=1.0$ ppm, full history, NO wake gating)**: `23,477` JSON -> **`3,242`** ChronoSieve Swing PLA Markdown (**-86.2%** vs JSON, **-77.8%** vs CSV, **-62.3%** vs TSLN).
+  - **10,000-tick telemetry**: `121,906` JSON -> **`6,310`** burst-2 gated (**-94.8%** vs JSON) / **`10,920`** high-recall with 100% spike wake recall (**-91.0%** vs JSON).
+- **Correctness**: ARM64 NEON (`1.141e-15`) & x86_64 AVX2 via Rosetta 2 (`1.887e-15`) vs scalar parity across 90 outputs (`<1e-12`), zero ASan/UBSan issues, zero `-Wall -Wextra -Wpedantic -Werror` warnings, and 0 runtime deps.
 
-There are great specialized compiled tools in each silo (`river` in Rust, `conformal-prediction`/`risksieve` in Rust, `stcpR6` in Rcpp, `TerseTS` in Zig, `tsln-python`); ChronoSieve aims to be the tiny, zero-dependency unified System-1 front-end + MCP bridge for streaming agents.
-
-Repo + `llms.txt` + `SKILL.md`: https://github.com/pgg898200-ship-it/chronosieve
-Happy to dig into the martingale math, SIMD quirks, or C11/Py_buffer design!
+Repo + SVG charts + `llms.txt` + `SKILL.md` + `server.json`: https://github.com/pgg898200-ship-it/chronosieve
+Happy to dig into the martingale math, SIMD sorting networks, or C11/`Py_buffer` internals!
 
 ---
 
 ## 2. X / Twitter Launch Thread
 
 **Tweet 1 (Hook):**
-Stop feeding 50,000 raw JSON telemetry tokens to LLMs—or trusting Gaussian drift detectors that collapse on heavy tails.
+Stop burning 120,000 real `o200k_base` tokens feeding raw JSON telemetry to LLMs—or trusting drift detectors that collapse on heavy tails.
 
-Introducing **ChronoSieve**: a 101 KB zero-dependency C11/SIMD engine for streaming change detection, conformal intervals, multi-agent fusion & MCP wake-up digests.
+**ChronoSieve v0.2.0**: a 118 KB zero-dep C11/SIMD engine for streaming e-detectors, conformal PID, multi-agent fusion & MCP digests.
 
-113M+ ticks/s native C11 (118M/s zero-copy Python) on Apple M4. MIT licensed. 🧵👇
+**492M ticks/s** Bounded, **251M/s** Catoni (**14.8x faster than Rust `river.ADWIN`**), **674M ch-tk/s** Conformal SoA on Apple M4. MIT licensed. 🧵👇
 
-**Tweet 2 (The 4 Primitives):**
-ChronoSieve fuses four 2023–2026 statistical primitives into one zero-dep C11/NEON/AVX2 library:
-1. Zero-`exp` E-Detectors (Catoni, Bounded, Symmetry, Vovk Rank B-tree) + Correlated Cross-Agent E-Fusion (ARL >= gamma on Cauchy & K=8, rho=0.85; catches the 1898 Nile dam shift w/ 0 false alarms)
-2. Pre-Control E-Reset Conformal PID + 418.8M ch-tk/s SoA SIMD + Online COMA
-3. Sleeping Fixed-Share BOA + automatic rogue/hallucinating agent quarantine
-4. Exact L_inf <= eps Swing PLA (91.6% BPE / 88.3% chars/4 full-series reduction on Mauna Loa CO2, no wake gate) + lossless `zoom(ch, t0, t1)`
+**Tweet 2 (Head-to-Head vs Rust `river 0.27.0`):**
+Head-to-head on Apple M4 (median of 5):
+- ChronoSieve Bounded E-SR: **2.03 ns/tick** (492M/s)
+- ChronoSieve Catoni E-SR: **3.98–4.06 ns/tick** (246–251M/s — **14.8x vs Rust `river.ADWIN`**, **54.6x vs `PageHinkley`**)
+- ChronoSieve Vovk Rank B-Tree: **63.2 ns/tick** (**2,530x vs `river.KSWIN`**)
+- On Cauchy(0,1): `PageHinkley` collapses (**100% FA, ARL 50**); Symmetry & Vovk Rank honor exact ARL >= 1000 & detect Student-t3 shifts **2.8–3.0x faster** than ADWIN!
 
-**Tweet 3 (The Subtle Math Invariant):**
-One trap we caught during Monte Carlo stress-testing: never feed closed-loop Conformal PID miscoverage into a changepoint detector or boost eta.
+**Tweet 3 (Peer-Relative Rogue Quarantine + Shock Recovery):**
+Two subtle failure modes solved cleanly in C11:
+1. **Exogenous 86-sigma sensor spikes**: Peer-relative excess residual attribution (`max(0, |y - p_k| - median_j |y - p_j|)`) + 50%-breakdown peer-median floor gives **505/505 seeds** zero false quarantines at default `rogue_threshold=200`.
+2. **5x volatility shocks**: Pre-Control E-Reset Conformal PID jumps post-shock 100-tick coverage from **39.0%** (pure PID) / **65.0%** (Rolling-D) to **85.0%** (and **90.6%** on 277 yrs of Sunspots).
 
-Instead, ChronoSieve runs Vovk Rank strictly on exogenous `s_t = |y_t - y_hat_t|`, resets *only* the bounded D-term `q_D in [0, B]`, and enforces a >=32-tick warmup.
+**Tweet 4 (Real OpenAI `tiktoken o200k_base` Compression):**
+Measured with real OpenAI `tiktoken 0.14.0` (`o200k_base`):
+- **Mauna Loa CO2** ($N=2,225$, full 43-yr series, $L_\infty \le 1.0$ ppm, NO wake gating): `23,477` JSON -> **`3,242`** Swing PLA Markdown (**-86.2%** vs JSON, **-62.3%** vs TSLN)
+- **10k Telemetry**: `121,906` JSON -> **`6,310`** burst-2 (**-94.8%**) / **`10,920`** high-recall (**-91.0%**, 100% spike recall)
+- Plus lossless $O(\log N)$ ring-buffer `zoom(ch, t0, t1)`!
 
-Result across three 4x–5x volatility shocks:
-- Full coverage: **90.1%** (target 90.0%)
-- Post-5x-shock 100-tick coverage: **85.0%** vs **65.0%** Rolling-D PID (+20 pp) vs **39.0%** pure P+I PID (+46 pp!)
-- Strictly causal out-of-sample Sunspots (1732–2008): **90.6%** vs **88.8%** Rolling-D / **86.6%** pure PID.
+**Tweet 5 (Agent-Native Distribution + CTA):**
+Ships with zero runtime dependencies:
+- Prebuilt wheels (macOS arm64, Linux manylinux, Windows amd64) + 118 KB standalone CLI
+- 1-command Claude Code / Cursor plugin (`.claude-plugin/marketplace.json`)
+- Official MCP Registry `server.json` + zero-dep `chronosieve-mcp`
+- `llms.txt`, `llms-full.txt`, `SKILL.md`, and 3 zero-dep `examples/`
 
-**Tweet 4 (Honest Apple M4 Numbers):**
-Real numbers on Apple M4 (`python3 benchmarks/run_all.py`, CLI vs Python `Py_buffer` kept separate):
-- Catoni E-SR (16-lane NEON): **8.82 ns** CLI | **8.47 ns** Py `array.array` | **9.03 ns** Py NumPy | 348 ns CPython scalar `step()`
-- Conformal PID SoA (64ch): **2.39 ns/ch-tk** (418.8M/s) CLI | **2.48 ns** (402.8M/s) Py batch
-- Swing PLA + RingBuf: **6.17 ns** (162.0M/s) CLI | **6.69 ns** (149.5M/s) Py batch
-- Mauna Loa CO2 ($N=2,225$, $L_\infty \le 1.0$ ppm): **91.6% BPE / 88.3% c/4** vs JSON (**71.9% BPE / 58.2% c/4** vs TSLN)
-- NEON (`1.14e-15`) & AVX2 (`7.85e-16`) vs scalar parity | ASan+UBSan clean | 0 runtime deps
-
-**Tweet 5 (Agent-Native + CTA):**
-Ships with:
-- Zero-copy `Py_buffer` Python C-extension (works with stdlib `array.array` or NumPy)
-- 101 KB native CLI (`chronosieve`)
-- Zero-dep stdio MCP server (`python3 -m chronosieve.mcp_server`)
-- Pure-Markdown `llms.txt`, `llms-full.txt`, and drop-in `SKILL.md`
-
-Code & reproducible benchmarks: https://github.com/pgg898200-ship-it/chronosieve
+Code & charts: https://github.com/pgg898200-ship-it/chronosieve
 
 ---
 
 ## 3. Reddit (`r/MachineLearning` [P] & `r/LocalLLaMA`)
 
 **Title (`r/MachineLearning`):**
-`[P] ChronoSieve: Zero-dep C11/SIMD E-Detectors, Pre-Control E-Reset Conformal PID + COMA, Sleeping BOA & MCP Stream Digests (113M+ ticks/s on M4)`
+`[P] ChronoSieve v0.2: Zero-dep C11/SIMD E-Detectors (246M–492M ticks/s, 14.8x vs Rust river.ADWIN), Pre-Control E-Reset Conformal PID (674M ch-tk/s), Peer-Relative BOA & Real tiktoken MCP Digests`
 
 **Body:**
-We built **ChronoSieve**, an MIT-licensed zero-dependency C11/SIMD (NEON + AVX2 + scalar) library that brings four recent online statistical inference results into one unified streaming engine (with zero-copy Python `Py_buffer` bindings, a 101 KB CLI, and a stdio MCP server):
+We just released **ChronoSieve v0.2.0**, an MIT-licensed zero-dependency C11/SIMD (ARM64 NEON, x86_64 AVX2, portable scalar) streaming inference and multi-agent digest engine with zero-copy Python `Py_buffer` bindings, a 118 KB standalone CLI, and a zero-dependency stdio MCP server:
 
-- **Zero-`exp` E-Detectors & Cross-Agent E-Fusion** (Shin, Ramdas & Rinaldo 2023; Wang & Ramdas 2023; Vovk 2021): 16-lane SIMD E-SR and log-domain E-CUSUM across Bounded Betting, Algebraic Catoni, Algebraic Symmetry (tested on Cauchy(0,1)), and Vovk Growing-Prefix Conformal Rank Betting (arena-backed $O(\log n)$ B-tree with deterministic epoch resets for bounded memory). Verified $\text{ARL} \ge \gamma$ under Student-$t_3$, Cauchy, discrete ties, and $K=8, \rho=0.85$ correlated streams, plus zero-prior detection of the **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms).
-- **Pre-Control E-Reset Conformal PID + Online COMA** (Angelopoulos et al. NeurIPS 2023; Gasparin & Ramdas UAI 2024): Resets only the bounded D-term scorecaster $\hat{q}^D \in [0, B]$ on exogenous pre-control residual shifts ($W_{\text{cal}} \ge 32$), preserving Theorem 1 asymptotic coverage (0.901 at $\alpha=0.10$) while raising post-5x-shock 100-tick coverage from 0.390 (pure P+I PID) / 0.650 (Rolling-D PID) to 0.850 (and 0.906 vs 0.888 Rolling-D / 0.866 pure PID on strictly causal out-of-sample **Sunspots** 1732–2008). Includes a 64-channel SoA NEON batch kernel (**418.8 M ch-ticks/s** Native CLI / **402.8 M ch-ticks/s** Python `Py_buffer`) and $O(K \log K)$ COMA interval consensus.
-- **Sleeping Fixed-Share BOA + Per-Agent Rogue Quarantine** (Wintenberger 2017; Herbster & Warmuth 1998): Handles asynchronous sleeping experts (fast System-1 + slow LLM System-2) with zero-regret imputation and Bonferroni-safe per-agent Catoni residual attribution.
-- **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`**: Exact $L_\infty \le \epsilon$ trajectory compression (`0.0` error on conformal anomalies). On real-world **Mauna Loa CO2** ($N=2,225, \epsilon=1.0$ ppm) with NO wake gating, native Swing PLA Markdown achieves **91.6% BPE-proxy / 88.3% `chars/4`** reduction vs Raw JSON (**71.9% BPE / 58.2% `c/4`** beyond TSLN, verified exact C $L_\infty = 1.000000 \le 1.00$ ppm and 1.0004 ppm Markdown text reconstruction). On 10k multi-regime telemetry, wake-up gated `burst=2` achieves **96.3% BPE / 95.0% `c/4`** vs JSON (100% pinned for `zoom()`, 0% 1-tick spike wakes) and high-recall `burst=1` achieves **93.7% BPE / 91.2% `c/4`** with **100%** pinned & wake-packet spike recall.
+- **Zero-`exp` Register-Resident SIMD E-Detectors & Cross-Agent E-Fusion**: Bounded Betting (`2.03 ns`, **492M/s**), Algebraic Catoni (`3.98–4.06 ns`, **246–251M/s**), Algebraic Symmetry (`4.54–4.63 ns`, **216–220M/s**), and SIMD arena B-tree Vovk Rank (`63.2 ns`, **15.8M/s**). Head-to-head against real Rust-backed `river 0.27.0` on Apple M4: **14.8x faster** than `ADWIN` (`60.3 ns`), **54.6x faster** than `PageHinkley` (`222.1 ns`), **2,530x faster** than `KSWIN` (`158.1 us`), with **2.6–3.0x faster** shift detection on Student-$t_3$ (`12.4–14.2` vs `37.3` ticks) and exact Cauchy(0,1) $\text{ARL} \ge \gamma$ where `PageHinkley` collapses (`100%` FA, ARL `50.1`).
+- **Pre-Control E-Reset Conformal PID + SoA SIMD + Zero-Copy `coma_merge_batch`**: Resets only the bounded D-term scorecaster $\hat{q}^D \in [0, B]$ on exogenous pre-control residual shifts ($W_{\text{cal}} \ge 32$), raising post-5x-shock 100-tick coverage from `39.0%` (pure P+I PID) / `65.0%` (Rolling-D) to `85.0%` (and `90.6%` OOS on 277 years of real Sunspots), plus **673.9M ch-tk/s** 64-channel SoA SIMD and zero-`malloc` **7.44M steps/s** CLI / **7.25M steps/s** Python batch COMA consensus (Gasparin & Ramdas UAI 2024).
+- **Sleeping Fixed-Share BOA + Peer-Relative Rogue Quarantine**: Branchless Batcher sorting-network median excess attribution with 50%-breakdown calibration floor (`113.8 ns/step` for $K=8$); survives 86-sigma exogenous common shocks across **505/505 seeds** with 0% false quarantine at default `rogue_threshold=200.0`.
+- **Anomaly-Preserving Swing PLA + Real `tiktoken o200k_base` Reduction**: **470.7M ticks/s** Native CLI (**404.4M/s** Python batch), exact $L_\infty \le \epsilon$ + verbatim `0.0`-error anomalies; **-86.2%** real `o200k_base` tokens on Mauna Loa CO2 ($N=2,225$, full series, NO wake gating) and **-94.8%** (`burst=2`) / **-91.0%** (`burst=1`, 100% spike wake recall) on 10k telemetry, plus lossless $O(\log N)$ ring-buffer `zoom()`.
 
-All benchmarks, ASan/UBSan C11 tests, NEON (`1.14e-15`) & AVX2 (`7.85e-16`) vs scalar `<1e-12` parity tests, and Monte Carlo + `statsmodels` verification scripts are reproducible in https://github.com/pgg898200-ship-it/chronosieve.
+Reproducible benchmarks, SVG charts, ASan/UBSan + Rosetta 2 AVX2 `<1e-12` parity tests, and 0-dep examples: https://github.com/pgg898200-ship-it/chronosieve

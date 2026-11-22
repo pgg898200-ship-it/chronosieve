@@ -227,7 +227,7 @@ def test_mcp_stdio_content_length_framing() -> None:
         )
         resp2 = _recv_content_length(proc)
         assert resp2["id"] == 43
-        assert resp2["result"]["structuredContent"]["version"] == "0.1.0"
+        assert resp2["result"]["structuredContent"]["version"] == "0.2.0"
     finally:
         assert proc.stdin is not None
         proc.stdin.close()
