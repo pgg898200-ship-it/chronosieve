@@ -4,7 +4,7 @@
 
 A latency monitor samples a service on every tick. ChronoSieve takes each timestamp and reading, compares the reading with a forecast, and returns a prediction interval and a `should_wake` flag. When the flag is true, your application can send the accompanying Markdown summary to an on-call engineer or a model. It can also retrieve the original readings from the channel’s recent history.
 
-![A radial print of 63 latency readings. One long mark at sample 50, a 31 ms spike among 12 ms readings, produces a digest when one anomaly is enough to wake the caller.](docs/chronosieve-signal.svg)
+![Three rows show 63 latency readings in sample order. One long mark at sample 50, a 31 ms spike among 12 ms readings, produces a digest when one anomaly is enough to wake the caller.](docs/chronosieve-signal.svg)
 
 [Run the latency example in Colab](https://colab.research.google.com/github/pgg898200-ship-it/chronosieve/blob/main/examples/replay_a_latency_spike.ipynb) · [Choose Python, CLI or MCP](#choose-an-interface) · [Agent reference](llms.txt)
 

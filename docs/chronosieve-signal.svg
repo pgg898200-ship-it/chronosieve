@@ -1,99 +1,82 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="960" height="426" viewBox="0 0 960 426" role="img" aria-labelledby="title description">
-  <title id="title">ChronoSieve — the single-anomaly gate</title>
-  <desc id="description">An instrument print made from 63 latency readings in sample order. Sixty-two short ink marks represent 12 ms. The long vermilion mark represents 31 ms at sample 50. With the anomaly burst set to one, only that reading emits a digest.</desc>
-  <defs>
-    <path id="reading-12" d="M54.09 -14.49 Q98.79 -21.00 146.00 0.00 L145.91 5.22 Q100.45 -10.56 55.06 -10.21 Z"/>
-    <path id="reading-31" d="M54.09 -14.49 Q168.49 -35.81 288.50 0.00 L288.32 10.32 Q171.31 -18.01 55.06 -10.21 Z"/>
-    <path id="ticket" d="M611 92H905V289H611L619 282.85L611 276.70L619 270.55L611 264.40L619 258.25L611 252.10L619 245.95L611 239.80L619 233.65L611 227.50L619 221.35L611 215.20L619 209.05L611 202.90L619 196.75L611 190.60L619 184.45L611 178.30L619 172.15L611 166.00L619 159.85L611 153.70L619 147.55L611 141.40L619 135.25L611 129.10L619 122.95L611 116.80L619 110.65L611 104.50L619 98.35L611 92.20Z"/>
-  </defs>
-  <rect width="960" height="426" fill="#fff3d7"/>
-  <g fill="#171729" font-family="Georgia, 'DejaVu Serif', serif">
-    <text x="34" y="50" font-size="36" letter-spacing="-1.6">ChronoSieve</text>
-  </g>
-  <g transform="translate(287 213)">
-    <use xlink:href="#reading-12" transform="rotate(-299.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-294.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-288.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-282.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-276.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-271.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-265.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-259.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-254.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-248.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-242.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-236.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-231.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-225.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-219.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-214.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-208.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-202.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-196.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-191.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-185.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-179.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-174.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-168.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-162.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-156.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-151.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-145.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-139.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-134.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-128.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-122.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-116.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-111.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-105.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-99.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-94.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-88.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-82.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-76.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-71.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-65.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-59.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-54.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-48.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-42.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-36.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-31.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-25.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-19.7143)" fill="#171729"/>
-    <use xlink:href="#reading-31" transform="rotate(-14.0000)" fill="#ef543c"/>
-    <use xlink:href="#reading-12" transform="rotate(-8.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(-2.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(3.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(8.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(14.5714)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(20.2857)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(26.0000)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(31.7143)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(37.4286)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(43.1429)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(48.8571)" fill="#171729"/>
-    <use xlink:href="#reading-12" transform="rotate(54.5714)" fill="#171729"/>
-    <circle r="47.5" fill="none" stroke="#171729" stroke-width="1" stroke-dasharray="0.8 4.1"/>
-    <text y="10" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', serif" font-size="46" fill="#171729">12</text>
-    <text y="30" text-anchor="middle" font-family="'DejaVu Sans Mono', monospace" font-size="19" fill="#171729">ms</text>
-  </g>
-  <g transform="rotate(-4 750 196)">
-    <use xlink:href="#ticket" transform="translate(3 5)" fill="#171729"/>
-    <use xlink:href="#ticket" fill="#ef543c"/>
-    <path d="M849 92V289" stroke="#fff3d7" stroke-width="2" stroke-dasharray="2 6"/>
-    <g fill="#171729">
-      <text x="637" y="134" font-family="Georgia, 'DejaVu Serif', serif" font-size="39" font-style="italic">Digest</text>
-      <text x="635" y="231" font-family="Georgia, 'DejaVu Serif', serif" font-size="103" letter-spacing="-9">31</text>
-      <text x="758" y="219" font-family="'DejaVu Sans Mono', monospace" font-size="29">ms</text>
-      <text x="637" y="270" font-family="'DejaVu Sans Mono', monospace" font-size="23">Sample 50</text>
-    </g>
-    <g fill="#171729"><circle cx="877" cy="119" r="6"/><circle cx="877" cy="262" r="6"/></g>
-    <g stroke="#171729" stroke-width="4"><path d="M865 162h23 M865 175h23 M865 188h10 M865 201h10 M865 214h23 M865 227h10"/></g>
-  </g>
-  <path d="M35 369H925" fill="none" stroke="#171729" stroke-width="1.3"/>
-  <g fill="#171729" font-family="Arial, 'DejaVu Sans', sans-serif" font-size="26">
-    <text x="35" y="405">63 latency readings</text>
-    <text x="925" y="405" text-anchor="end">One-anomaly gate</text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 590 339" width="590" height="339" role="img" aria-labelledby="title desc">
+<title id="title">ChronoSieve — the single-anomaly gate</title>
+  <desc id="desc">The 63 latency readings are shown left to right, 21 per row. The 62 short ticks represent 12 ms. The single longer tick at sample 50 represents 31 ms. With the anomaly burst set to one, only sample 50 produces a digest.</desc>
+<rect width="590" height="339" fill="#FAFAFA"/>
+<text x="24" y="39" font-size="29" font-family="'Instrument Sans', Arial, sans-serif" fill="#141619" font-weight="650" text-anchor="start">When the channel wakes</text>
+<text x="24" y="69" font-size="19" font-family="'Instrument Sans', Arial, sans-serif" fill="#555C65" font-weight="400" text-anchor="start">One-anomaly gate · 63 latency readings</text>
+<line x1="24" y1="83" x2="556" y2="83" stroke="#DADDE1" stroke-width="1"/>
+<path d="M35 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M58 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M81 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M104 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M127 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M150 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M173 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M196 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M219 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M242 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M265 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M288 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M311 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M334 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M357 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M380 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M403 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M426 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M449 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M472 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M495 130v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M35 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M58 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M81 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M104 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M127 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M150 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M173 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M196 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M219 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M242 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M265 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M288 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M311 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M334 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M357 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M380 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M403 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M426 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M449 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M472 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M495 180v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M35 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M58 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M81 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M104 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M127 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M150 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M173 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M196 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M219 230v-31" stroke="#315BFF" stroke-width="6" stroke-linecap="square"/>
+<circle cx="219" cy="199" r="5" fill="#315BFF"/>
+<path d="M242 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M265 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M288 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M311 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M334 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M357 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M380 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M403 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M426 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M449 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M472 230v-12" stroke="#555C65" stroke-width="5"/>
+<path d="M495 230v-12" stroke="#555C65" stroke-width="5"/>
+<text x="527" y="130" font-size="14" font-family="'IBM Plex Mono', 'DejaVu Sans Mono', monospace" fill="#555C65" font-weight="400" text-anchor="start">0–20</text>
+<text x="527" y="180" font-size="14" font-family="'IBM Plex Mono', 'DejaVu Sans Mono', monospace" fill="#555C65" font-weight="400" text-anchor="start">21–41</text>
+<text x="527" y="230" font-size="14" font-family="'IBM Plex Mono', 'DejaVu Sans Mono', monospace" fill="#555C65" font-weight="400" text-anchor="start">42–62</text>
+<line x1="24" y1="252" x2="556" y2="252" stroke="#DADDE1" stroke-width="1"/>
+<text x="24" y="281" font-size="16" font-family="'Instrument Sans', Arial, sans-serif" fill="#555C65" font-weight="400" text-anchor="start">Baseline</text>
+<text x="24" y="311" font-size="24" font-family="'IBM Plex Mono', 'DejaVu Sans Mono', monospace" fill="#141619" font-weight="400" text-anchor="start">12 ms</text>
+<text x="182" y="281" font-size="16" font-family="'Instrument Sans', Arial, sans-serif" fill="#555C65" font-weight="400" text-anchor="start">Sample 50</text>
+<text x="182" y="311" font-size="24" font-family="'IBM Plex Mono', 'DejaVu Sans Mono', monospace" fill="#315BFF" font-weight="600" text-anchor="start">31 ms</text>
+<text x="351" y="281" font-size="16" font-family="'Instrument Sans', Arial, sans-serif" fill="#555C65" font-weight="400" text-anchor="start">Output at sample 50</text>
+<text x="351" y="311" font-size="24" font-family="'IBM Plex Mono', 'DejaVu Sans Mono', monospace" fill="#315BFF" font-weight="600" text-anchor="start">1 digest</text>
 </svg>
