@@ -20,8 +20,8 @@ jobs:
           python-version: "3.12"
       - name: Build & verify sdist
         run: |
-          python -m pip install --upgrade pip build
-          python -m build --sdist --outdir dist/
+          python -m pip install --upgrade pip setuptools build
+          python -m build --sdist --no-isolation --outdir dist/
           python -m pip install --no-build-isolation --no-deps dist/*.tar.gz
           python -c "import chronosieve as cs; print('sdist OK:', cs.__version__, cs.simd_backend())"
       - uses: actions/upload-artifact@v4

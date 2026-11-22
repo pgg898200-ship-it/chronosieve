@@ -3,7 +3,7 @@
   "name": "io.github.pgg898200-ship-it/chronosieve",
   "title": "ChronoSieve Streaming Inference & Digest Engine",
   "description": "Zero-dependency C11/SIMD MCP server for streaming changepoint detection (zero-exp e-detectors), Pre-Control E-Reset Conformal PID intervals, Sleeping BOA multi-agent fusion with peer-relative rogue quarantine, and lossless-zoom Swing PLA telemetry digests.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "websiteUrl": "https://pgg898200-ship-it.github.io/chronosieve/",
   "repository": {
     "url": "https://github.com/pgg898200-ship-it/chronosieve",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "chronosieve",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

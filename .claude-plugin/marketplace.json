@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Zero-dependency C11/SIMD streaming inference, conformal uncertainty, multi-agent fusion & MCP digest engine.",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "plugins": [
     {
       "name": "chronosieve",
       "source": "./",
       "description": "Streaming e-detectors (507M ticks/s Bounded, 248M ticks/s Catoni), Pre-Control E-Reset Conformal PID (684M ch-tk/s), Sleeping Fixed-Share BOA with peer-relative rogue quarantine, and lossless-zoom Swing PLA digests via MCP.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "category": "monitoring",
       "keywords": [
         "time-series",

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from typing import Any
 
+import chronosieve as cs
+
 
 def _send_ndjson(proc: subprocess.Popen[bytes], payload: dict[str, Any]) -> None:
     assert proc.stdin is not None
@@ -227,7 +229,7 @@ def test_mcp_stdio_content_length_framing() -> None:
         )
         resp2 = _recv_content_length(proc)
         assert resp2["id"] == 43
-        assert resp2["result"]["structuredContent"]["version"] == "0.2.0"
+        assert resp2["result"]["structuredContent"]["version"] == cs.__version__
     finally:
         assert proc.stdin is not None
         proc.stdin.close()

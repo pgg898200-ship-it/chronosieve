@@ -20,7 +20,7 @@ Raw telemetry / K async agents ──► [C11/NEON|AVX2 System-1: 1.9–4.0 ns/t
 
 Most streaming stacks force you to stitch together five slow, fragile pieces: a Gaussian drift detector whose false-alarm rate collapses on heavy tails, a conformal tracker that takes 150 ticks to recover after a volatility shock, a naive ensemble that breaks when slow LLM agents sleep asynchronously or a common exogenous spike hits, and raw JSON/CSV telemetry that burns 120,000+ LLM tokens per window.
 
-**ChronoSieve v0.2.0 fuses four 2023–2026 statistical primitives into one zero-dependency C11/SIMD core** with a zero-copy `Py_buffer` Python extension, a **118 KB standalone CLI**, and a **zero-dependency stdio MCP server**:
+**ChronoSieve v0.2.1 fuses four 2023–2026 statistical primitives into one zero-dependency C11/SIMD core** with a zero-copy `Py_buffer` Python extension, a **118 KB standalone CLI**, and a **zero-dependency stdio MCP server**:
 
 1. **Zero-`exp` SIMD E-Detectors & Cross-Agent E-Fusion** (`EDetector`, `EFusion`): Register-resident 16-lane NEON & x86_64 AVX2 E-SR and log-domain E-CUSUM across 4 distribution-free families — **Bounded Betting** (**491.6M ticks/s**), **Algebraic Catoni** (Wang & Ramdas 2023; **251.4M ticks/s** stdlib `array.array` / **246.5M ticks/s** NumPy, zero `exp()`), **Algebraic Symmetry** (**220.0M ticks/s**, valid even for infinite-variance Cauchy), and **Vovk Growing-Prefix Conformal Rank Betting** (cache-line-aligned SIMD arena B-tree at **15.8M ticks/s**, **2,530x faster** than `river.KSWIN`). Cross-agent E-Fusion guarantees $\text{ARL} \ge \gamma$ under arbitrary unknown cross-agent correlation ($K=8, \rho=0.85$), and detects the historic **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms, zero priors).
 2. **Pre-Control E-Reset Conformal PID + SoA SIMD + Zero-Copy `coma_merge_batch`** (`ConformalPID`, `ConformalBatchPID`, `coma_merge`, `coma_merge_batch`): Exact Angelopoulos et al. (NeurIPS 2023) Conformal PID with saturating tangent integrator. Runs its Vovk Rank E-detector strictly on the **exogenous pre-control score** $s_t = |y_t - \hat{y}_t|$ (never closed-loop miscoverage $I_t$), resets **only** the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ with mandatory $W_{\text{cal}} \ge 32$ warmup (**+20 pp** over Rolling-D PID and **+46 pp** over pure P+I PID after 5x volatility shocks; **90.6%** out-of-sample coverage over 277 years of real **Sunspot** cycles), plus a **673.9M ch-ticks/s** (`1.48 ns/ch-tk`) 64-channel SoA SIMD kernel and zero-`malloc` $O(K \log K)$ **Online COMA** batch consensus (**7.44M steps/s** CLI / **7.25M steps/s** Python, Gasparin & Ramdas UAI 2024).
@@ -28,6 +28,54 @@ Most streaming stacks force you to stitch together five slow, fragile pieces: a 
 4. **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`** (`StreamDigest`): Exact ULP-guarded $L_\infty \le \epsilon$ piecewise linear trajectory compression at **470.7M ticks/s** Native CLI (**404.4M ticks/s** Python `Py_buffer`), verbatim `0.0`-error pinning of conformal anomalies, **86.2% real OpenAI `o200k_base`** full-series token reduction on real-world **Mauna Loa CO2** without wake gating (**94.8% real `o200k_base`** with wake gating on 10k telemetry), and an $O(\log N)$ fixed-memory circular ring buffer for lossless `zoom(channel, t0, t1)` drill-down via Python, CLI, or MCP.
 
 ---
+
+## Replay one latency spike
+
+![One 31 ms spike in a 12 ms trace. One gate emits a digest and the other stays quiet. Both retain the reading.](docs/latency-spike.svg)
+
+[Run the replay in Colab](https://colab.research.google.com/github/pgg898200-ship-it/chronosieve/blob/main/examples/replay_a_latency_spike.ipynb) · [Read the notebook](examples/replay_a_latency_spike.ipynb) · [Inspect the measured workloads](benchmarks/results_m4.json)
+
+Install with zero Python runtime dependencies (`CC=cc` selects the system C11 compiler on Linux/macOS):
+
+```bash
+CC=cc python3 -m pip install "git+https://github.com/pgg898200-ship-it/chronosieve.git"
+```
+
+This synthetic trace holds latency at 12 ms, injects one 31 ms observation, then returns to baseline. Run it with two anomaly-burst settings:
+
+```python
+from chronosieve import ChronoSieve
+
+latency = [12.0] * 50 + [31.0] + [12.0] * 12
+for burst in (1, 2):
+    channel = ChronoSieve(channel="latency_ms", anomaly_burst=burst)
+    wakes = []
+    for t, value in enumerate(latency):
+        result = channel.step(t, value, preds=[12.0])
+        if result["should_wake"]:
+            wakes.append(t)
+    samples = channel.zoom(49, 51)["records"]
+    print(burst, wakes, [row["y"] for row in samples])
+```
+
+```text
+1 [50] [12.0, 31.0, 12.0]
+2 [] [12.0, 31.0, 12.0]
+```
+
+The columns are the burst setting, the ticks that produced digests, and the original values at ticks 49 through 51. With `anomaly_burst=1` the isolated spike wakes the caller. With `anomaly_burst=2` this replay stays quiet. Both runs retain the exact readings until they age out of the ring buffer. A detected shift or a newly flagged forecaster can wake the caller independently of the burst setting.
+
+## Choose an interface
+
+| Your application | Entry point | Result |
+|---|---|---|
+| A telemetry collector feeding an alert rule or LLM | Python `ChronoSieve.step(t, y)` | Per-tick interval and wake decision, plus a Markdown digest on wake |
+| A residual stream with a known baseline | `EDetector.step(residual)` | Sequential change statistic and alarm flag for the selected detector family |
+| A stream in a file or shell pipeline | [Native CLI](#detect-a-change-with-the-native-cli) | The first alarm tick and detector statistic, in text or JSON |
+| Several intermittent forecasters | `ChronoSieve.step(t, y, preds=…, active=…)` | Combined prediction and updated interval |
+| An MCP client inspecting a channel | `chronosieve_ingest`, then `chronosieve_zoom` | Batch wake count and retained original samples over an inclusive time range |
+
+After a detector alarm, [KthWake](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/kthwake-0.1.0/companions/kthwake) can escalate recurring alarms and [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can route an alarm to a worker with capacity. Both have runnable examples below.
 
 ## Verified Apple M4 Benchmarks (v0.2.0)
 
@@ -155,7 +203,7 @@ We credit strong compiled incumbents in each individual silo (`river` Rust, `con
 
 ---
 
-## Install
+## Build from a checkout
 
 ```bash
 # Python C11/SIMD extension (zero runtime dependencies, auto-enables NEON on arm64)
@@ -184,7 +232,7 @@ python3 examples/mcp_agent_demo.py             # Live stdio JSON-RPC 2.0 MCP ser
 
 ### Optional repeated-alarm escalation
 
-The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into KthWake. It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
+The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into [KthWake](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/kthwake-0.1.0/companions/kthwake). It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
 
 From a ChronoSieve checkout with CPython, setuptools, wheel and C/C++17 compilers:
 
@@ -227,11 +275,26 @@ if out["should_wake"]:
 # summary = cs.coma_merge_batch(lowers_2d, uppers_2d, out_hull_lo=hlo, out_hull_hi=hhi)
 ```
 
-### 2. Native 118 KB C11 CLI
+### Detect a change with the native CLI (118 KB)
 
-```bash
-./chronosieve info
-printf '0.1\n-0.2\n0.0\n3.5\n3.8\n4.1\n' | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 50 --json
+From a checkout with Make and a C11 compiler, feed eight readings into the Catoni detector.
+
+```sh
+make cli
+printf '%s\n' 0 0 0 0 0 0 3 3 | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 20
+```
+
+```text
+ALARM tick=7 stat=21.2617 threshold=20.00
+```
+
+![Eight readings go from zero to three at tick 6. The detector statistic crosses the threshold of 20 at tick 7.](docs/first-alarm.svg)
+
+In this synthetic trace the alarm arrives on the second changed reading, at zero-based tick 7. The CLI then prints a summary. Add `--json` for a single machine-readable record. Run `./chronosieve detect --help` for the input format and options.
+
+Other native commands can summarize a series or time the kernels on this machine.
+
+```sh
 seq 1 200 | awk '{print $1 "," ($1==120 ? 50.0 : sin($1*0.05))}' | ./chronosieve digest --eps 0.05 --channel sensor_0
 ./chronosieve bench --n 2000000
 ```

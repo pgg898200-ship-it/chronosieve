@@ -1,6 +1,6 @@
 {
   "name": "chronosieve",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zero-dependency C11/SIMD streaming changepoint detection (zero-exp e-detectors), Pre-Control E-Reset Conformal PID, Sleeping Fixed-Share BOA multi-agent fusion with peer-relative rogue quarantine, and lossless-zoom Swing PLA LLM digest engine.",
   "author": {
     "name": "ChronoSieve Contributors",

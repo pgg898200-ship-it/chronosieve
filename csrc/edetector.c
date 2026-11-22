@@ -10,7 +10,7 @@
 #define CS_LOG_MAX 690.0
 
 const char *cs_version_string(void) {
-    return "0.2.0";
+    return "0.2.1";
 }
 
 const char *cs_simd_backend_name(void) {
