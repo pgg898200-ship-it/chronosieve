@@ -1,32 +1,55 @@
 # ChronoSieve
 
-**101 KB zero-dependency C11/SIMD engine for mathematically certified streaming change detection, conformal uncertainty, multi-agent fusion, and LLM wake-up digests.**
+**Decide when a stream of measurements should wake an agent.**
 
-[![CI](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml/badge.svg)](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](#install)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#install)
+Put ChronoSieve between your telemetry collector and the code that pages a person or calls a model. Feed it timestamped observations and, optionally, forecasts. Each update returns a prediction interval and a `should_wake` decision. When the gate opens, `digest_markdown` contains a short account of the channel. Your application decides where to send it.
 
+![One 31 ms spike in a 12 ms trace. One gate emits a digest and the other stays quiet. Both retain the reading.](docs/latency-spike.svg)
+
+[Run the replay in Colab](https://colab.research.google.com/github/pgg898200-ship-it/chronosieve/blob/main/examples/replay_a_latency_spike.ipynb) · [Read the notebook](examples/replay_a_latency_spike.ipynb) · [Inspect the measured workloads](benchmarks/results_m4.json)
+
+## Replay one latency spike
+
+Install the tested revision using Git, CPython 3.10+ with development headers, and a C11 compiler. This command selects the system compiler on Linux or macOS. The extension has no Python runtime dependencies.
+
+```bash
+CC=cc python3 -m pip install "git+https://github.com/pgg898200-ship-it/chronosieve.git@743092a8c0da995a2e5007d7fea56ae16e669fe2"
 ```
-Raw telemetry / K async agents ──► [C11/NEON|AVX2 System-1: ~9 ns/tick] ──► 0 LLM tokens while stationary
-                                            │
-                                            ├── Certified shift (ARL >= gamma)
-                                            ├── Rogue / hallucinating agent isolated
-                                            └── Conformal anomaly (verbatim, 0.0 error)
-                                            ▼
-                                  ~195–200-token (chars/4) Markdown Digest + lossless zoom(ch, t0, t1)
+
+This synthetic trace holds latency at 12 ms, injects one 31 ms observation, then returns to baseline. Run it with two anomaly-burst settings.
+
+```python
+from chronosieve import ChronoSieve
+
+latency = [12.0] * 50 + [31.0] + [12.0] * 12
+for burst in (1, 2):
+    channel = ChronoSieve(channel="latency_ms", anomaly_burst=burst)
+    wakes = []
+    for t, value in enumerate(latency):
+        result = channel.step(t, value, preds=[12.0])
+        if result["should_wake"]:
+            wakes.append(t)
+    samples = channel.zoom(49, 51)["records"]
+    print(burst, wakes, [row["y"] for row in samples])
 ```
 
-Most streaming stacks force you to stitch together five slow, fragile pieces: a Gaussian drift detector whose false-alarm rate collapses on heavy tails, a conformal tracker that takes 150 ticks to recover after a volatility shock, a naive ensemble that breaks when slow LLM agents sleep asynchronously, and raw JSON/CSV telemetry that burns 50,000+ LLM tokens per window.
+```text
+1 [50] [12.0, 31.0, 12.0]
+2 [] [12.0, 31.0, 12.0]
+```
 
-**ChronoSieve fuses four 2023–2026 statistical primitives into one zero-dependency C11/SIMD core** with a zero-copy `Py_buffer` Python extension, a **101 KB native CLI**, and a **zero-dependency stdio MCP server**:
+The columns are the burst setting, the ticks that produced digests, and the original values at ticks 49 through 51. With `anomaly_burst=1` the isolated spike wakes the caller. With `anomaly_burst=2` this replay stays quiet. Both runs retain the exact readings until they age out of the ring buffer. A detected shift or a newly flagged forecaster can wake the caller independently of the burst setting.
 
-1. **Zero-`exp` SIMD E-Detectors & Cross-Agent E-Fusion** (`EDetector`, `EFusion`): 16-lane cache-aligned NEON/AVX2 E-SR & log-domain E-CUSUM across 4 distribution-free families — **Bounded Betting**, **Algebraic Catoni** (Wang & Ramdas 2023; finite variance, zero `exp()`), **Algebraic Symmetry** (valid even for infinite-variance Cauchy), and **Vovk Growing-Prefix Conformal Rank Betting** ($O(\log n)$ arena B-tree with deterministic epoch resets for bounded-memory infinite streams). Cross-agent E-Fusion guarantees $\text{ARL} \ge \gamma$ under arbitrary unknown cross-agent correlation ($K=8, \rho=0.85$), and detects the historic **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms, zero priors).
-2. **Pre-Control E-Reset Conformal PID + Multi-Agent COMA** (`ConformalPID`, `ConformalBatchPID`, `coma_merge`): Exact Angelopoulos et al. (NeurIPS 2023) Conformal PID with saturating tangent integrator. Runs its Vovk Rank E-detector strictly on the **exogenous pre-control score** $s_t = |y_t - \hat{y}_t|$ (never closed-loop miscoverage $I_t$), resets **only** the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ with mandatory $W_{\text{cal}} \ge 32$ warmup (preserving exact asymptotic $1-\alpha$ coverage while improving post-5x-shock coverage by **+20 pp** over Rolling-D PID and **+46 pp** over pure P+I PID, and tracking 277 out-of-sample years of real **Sunspot** cycles at **90.6%** vs 88.8% Rolling-D / 86.6% pure PID), plus a **418.8 M ch-ticks/s** Native CLI (**402.8 M ch-ticks/s** Python `Py_buffer`) 64-channel SoA SIMD batch kernel and $O(K \log K)$ **Online COMA** interval consensus (Gasparin & Ramdas, UAI 2024).
-3. **SIMD Sleeping Fixed-Share BOA + Rogue Agent Attribution** (`SleepingBOA`): Asynchronous active bitmask $a_{t,k} \in \{0,1\}$ (zero-regret sleeping-expert imputation for mixing fast System-1 models with slow System-2 LLMs), fast SIMD Estrin/Cephes `exp()` (`< 5e-16` relative error), shift-coupled Fixed-Share mixing boost, and family-wise Bonferroni-safe per-agent residual Catoni E-detectors that isolate and quarantine hallucinating agents in 1–10 ticks.
-4. **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`** (`StreamDigest`): Exact $L_\infty \le \epsilon$ piecewise linear trajectory compression at **162.0 M ticks/s** Native CLI (**149.5 M ticks/s** Python `Py_buffer`), verbatim `0.0`-error pinning of conformal anomalies, **91.6% BPE-proxy (88.3% `chars/4`)** full-series token reduction on real-world **Mauna Loa CO2** without wake gating (**96.3% BPE-proxy / 95.0% `chars/4`** with wake gating on 10k telemetry), and an $O(\log N)$ fixed-memory circular ring buffer for lossless `zoom(channel, t0, t1)` drill-down via Python, CLI, or MCP.
+## Choose an interface
 
----
+| Your application | Entry point | Result |
+|---|---|---|
+| A telemetry collector feeding an alert rule or LLM | Python `ChronoSieve.step(t, y)` | Per-tick interval and wake decision, plus a Markdown digest on wake |
+| A residual stream with a known baseline | `EDetector.step(residual)` | Sequential change statistic and alarm flag for the selected detector family |
+| Several intermittent forecasters | `ChronoSieve.step(t, y, preds=…, active=…)` | Combined prediction and updated interval |
+| An MCP client inspecting a channel | `chronosieve_ingest`, then `chronosieve_zoom` | Batch wake count and retained original samples over an inclusive time range |
+
+After a detector alarm, [KthWake](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/kthwake-0.1.0/companions/kthwake) can escalate recurring alarms and [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can route an alarm to a worker with capacity. Both have runnable examples below.
 
 ## Verified Apple M4 Benchmarks
 
@@ -122,7 +145,7 @@ We credit strong compiled incumbents in each individual silo (`river` Rust, `con
 
 ---
 
-## Install
+## Build from a checkout
 
 ```bash
 # Python C11/SIMD extension (zero runtime dependencies, auto-enables NEON on arm64)
@@ -139,7 +162,7 @@ make cli
 
 ## Optional repeated-alarm escalation
 
-The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into KthWake. It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
+The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into [KthWake](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/kthwake-0.1.0/companions/kthwake). It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
 
 From a ChronoSieve checkout with CPython, setuptools, wheel and C/C++17 compilers:
 
