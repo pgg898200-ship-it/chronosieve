@@ -1,32 +1,143 @@
 # ChronoSieve
 
-**101 KB zero-dependency C11/SIMD engine for mathematically certified streaming change detection, conformal uncertainty, multi-agent fusion, and LLM wake-up digests.**
+Detect changes in a stream of numbers. Feed ChronoSieve telemetry or prediction errors and get the tick where the detector first raises an alarm. In an agent pipeline, it can also fuse forecasts, send a compact Markdown digest on wake-up, and return the original readings still in its buffer.
 
-[![CI](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml/badge.svg)](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](#install)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#install)
+![Eight readings go from zero to three at tick 6. The detector statistic crosses the threshold of 20 at tick 7.](docs/first-alarm.svg)
 
-```
-Raw telemetry / K async agents ──► [C11/NEON|AVX2 System-1: ~9 ns/tick] ──► 0 LLM tokens while stationary
-                                            │
-                                            ├── Certified shift (ARL >= gamma)
-                                            ├── Rogue / hallucinating agent isolated
-                                            └── Conformal anomaly (verbatim, 0.0 error)
-                                            ▼
-                                  ~195–200-token (chars/4) Markdown Digest + lossless zoom(ch, t0, t1)
+## Run the trace
+
+Run this from a checkout with Make and a C11 compiler.
+
+```sh
+make cli
+printf '%s\n' 0 0 0 0 0 0 3 3 | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 20
 ```
 
-Most streaming stacks force you to stitch together five slow, fragile pieces: a Gaussian drift detector whose false-alarm rate collapses on heavy tails, a conformal tracker that takes 150 ticks to recover after a volatility shock, a naive ensemble that breaks when slow LLM agents sleep asynchronously, and raw JSON/CSV telemetry that burns 50,000+ LLM tokens per window.
+```text
+ALARM tick=7 stat=21.2617 threshold=20.00
+```
 
-**ChronoSieve fuses four 2023–2026 statistical primitives into one zero-dependency C11/SIMD core** with a zero-copy `Py_buffer` Python extension, a **101 KB native CLI**, and a **zero-dependency stdio MCP server**:
+The first six readings are zero. The next two are three. The first alarm arrives on the second changed reading, at zero-based tick 7. The CLI then prints a summary. Add `--json` for one machine-readable record. Run `./chronosieve detect --help` for the input format and options. This synthetic trace illustrates the output. Detection delay depends on the stream and threshold.
 
-1. **Zero-`exp` SIMD E-Detectors & Cross-Agent E-Fusion** (`EDetector`, `EFusion`): 16-lane cache-aligned NEON/AVX2 E-SR & log-domain E-CUSUM across 4 distribution-free families — **Bounded Betting**, **Algebraic Catoni** (Wang & Ramdas 2023; finite variance, zero `exp()`), **Algebraic Symmetry** (valid even for infinite-variance Cauchy), and **Vovk Growing-Prefix Conformal Rank Betting** ($O(\log n)$ arena B-tree with deterministic epoch resets for bounded-memory infinite streams). Cross-agent E-Fusion guarantees $\text{ARL} \ge \gamma$ under arbitrary unknown cross-agent correlation ($K=8, \rho=0.85$), and detects the historic **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms, zero priors).
-2. **Pre-Control E-Reset Conformal PID + Multi-Agent COMA** (`ConformalPID`, `ConformalBatchPID`, `coma_merge`): Exact Angelopoulos et al. (NeurIPS 2023) Conformal PID with saturating tangent integrator. Runs its Vovk Rank E-detector strictly on the **exogenous pre-control score** $s_t = |y_t - \hat{y}_t|$ (never closed-loop miscoverage $I_t$), resets **only** the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ with mandatory $W_{\text{cal}} \ge 32$ warmup (preserving exact asymptotic $1-\alpha$ coverage while improving post-5x-shock coverage by **+20 pp** over Rolling-D PID and **+46 pp** over pure P+I PID, and tracking 277 out-of-sample years of real **Sunspot** cycles at **90.6%** vs 88.8% Rolling-D / 86.6% pure PID), plus a **418.8 M ch-ticks/s** Native CLI (**402.8 M ch-ticks/s** Python `Py_buffer`) 64-channel SoA SIMD batch kernel and $O(K \log K)$ **Online COMA** interval consensus (Gasparin & Ramdas, UAI 2024).
-3. **SIMD Sleeping Fixed-Share BOA + Rogue Agent Attribution** (`SleepingBOA`): Asynchronous active bitmask $a_{t,k} \in \{0,1\}$ (zero-regret sleeping-expert imputation for mixing fast System-1 models with slow System-2 LLMs), fast SIMD Estrin/Cephes `exp()` (`< 5e-16` relative error), shift-coupled Fixed-Share mixing boost, and family-wise Bonferroni-safe per-agent residual Catoni E-detectors that isolate and quarantine hallucinating agents in 1–10 ticks.
-4. **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`** (`StreamDigest`): Exact $L_\infty \le \epsilon$ piecewise linear trajectory compression at **162.0 M ticks/s** Native CLI (**149.5 M ticks/s** Python `Py_buffer`), verbatim `0.0`-error pinning of conformal anomalies, **91.6% BPE-proxy (88.3% `chars/4`)** full-series token reduction on real-world **Mauna Loa CO2** without wake gating (**96.3% BPE-proxy / 95.0% `chars/4`** with wake gating on 10k telemetry), and an $O(\log N)$ fixed-memory circular ring buffer for lossless `zoom(channel, t0, t1)` drill-down via Python, CLI, or MCP.
+Use the [Python and C quickstarts](#quickstarts) to embed the detector. The same library also provides online prediction intervals, weighted multi-agent forecasts and a bounded time-series digest. [Apple M4 benchmarks and reproduction commands](#verified-apple-m4-benchmarks) cover the native, Python batch and scalar interfaces separately.
+
+## Install
+
+```bash
+# Python C11/SIMD extension (zero runtime dependencies, auto-enables NEON on arm64)
+python3 -m pip install --no-build-isolation -e .
+
+# Optional x86_64 AVX2 build:
+CHRONOSIEVE_AVX2=1 python3 -m pip install --no-build-isolation -e .
+
+# Native 101 KB C11 CLI binary:
+make cli
+```
 
 ---
+
+## Quickstarts
+
+### 1. Python Zero-Copy Batch & Multi-Agent Pipeline (Zero Dependencies)
+
+```python
+import array
+import chronosieve as cs
+
+# 1) 110M+ ticks/sec zero-copy Catoni E-Detector (works with stdlib array.array OR NumPy)
+xs = array.array("d", [0.0] * 1000 + [2.5] * 100)
+alarms = bytearray(len(xs))
+det = cs.EDetector(family="catoni", mu0=0.0, sigma=1.0, threshold=500.0)
+res = det.ingest_batch(xs, out_alarms=alarms)
+print("First certified shift tick:", alarms.index(1), "ARL >= 500")
+
+# 2) Unified multi-agent pipeline: Sleeping BOA + Pre-Control E-Reset PID + COMA + Swing PLA
+pipe = cs.ChronoSieve(channel="gpu_temp", n_agents=3, alpha=0.10, epsilon=0.05)
+out = pipe.step(
+    t=42.0,
+    y=71.2,
+    preds=[71.0, 71.4, 95.0],       # Agent 2 hallucinating
+    active=[1, 0, 1],               # Agent 1 sleeping asynchronously
+    agent_intervals=[(70.5, 71.5), (70.8, 72.0), (94.0, 96.0)],
+)
+if out["should_wake"]:
+    print(out["digest_markdown"])   # ~195-token Markdown packet for System-2 LLM
+    raw = pipe.zoom(35.0, 42.0)     # Exact lossless ring-buffer drill-down
+```
+
+### 2. Native 101 KB C11 CLI
+
+```bash
+./chronosieve info
+printf '0.1\n-0.2\n0.0\n3.5\n3.8\n4.1\n' | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 50 --json
+seq 1 200 | awk '{print $1 "," ($1==120 ? 50.0 : sin($1*0.05))}' | ./chronosieve digest --eps 0.05 --channel sensor_0
+./chronosieve bench --n 2000000
+```
+
+### 3. Zero-Dependency Stdio MCP Server
+
+```bash
+python3 -m chronosieve.mcp_server
+# or installed entrypoint:
+chronosieve-mcp
+```
+
+Add to Claude Desktop / Cursor / any MCP client:
+
+```json
+{
+  "mcpServers": {
+    "chronosieve": {
+      "command": "python3",
+      "args": ["-m", "chronosieve.mcp_server"]
+    }
+  }
+}
+```
+
+Tools exposed: `chronosieve_create_channel`, `chronosieve_ingest`, `chronosieve_zoom`, `chronosieve_digest`, `chronosieve_coma`, `chronosieve_status`.
+
+### 4. Pure C11 Embedding
+
+```c
+#include "chronosieve.h"
+// Link csrc/edetector.c csrc/conformal.c csrc/fuser.c csrc/digest.c -lm
+```
+
+---
+
+## Optional repeated-alarm escalation
+
+The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into KthWake. It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
+
+From a ChronoSieve checkout with CPython, setuptools, wheel and C/C++17 compilers:
+
+```bash
+KTHWAKE_SOURCE='git+https://github.com/pgg898200-ship-it/chronosieve.git@7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f#subdirectory=companions/kthwake'
+python3 -m pip install --no-build-isolation . "${KTHWAKE_SOURCE}"
+python3 examples/alarm_escalation.py
+python3 examples/verify_alarm_escalation.py
+```
+
+Set `KTHWAKE_SOURCE` to a local source checkout for development. Pass `--stdin` to replay JSONL rows with `t_ms` and `residual`. Supply observations in nondecreasing timestamp order. The example groups alarms at equal timestamps and emits silent-period updates at their logical deadlines when more data arrives or input closes. A live event loop can arm its timer at `Index.next_expiry()`.
+
+## Route a wakeup to a worker
+
+ChronoSieve can signal when a stream changes. [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can combine that alarm with capacity, queue depth, or another integer condition and emit one enter/exit event per affected worker. The [runnable integration example](https://github.com/pgg898200-ship-it/chronosieve/blob/releases/guardshift/guardshift/examples/chronosieve_routing.py) feeds a batch through `EDetector` and dispatches the first alarm when capacity is available. [Try atomic updates in the browser](https://huggingface.co/spaces/pgg-engineering/guardshift).
+
+## For AI & Coding Agents
+
+- Machine-readable index: [llms.txt](llms.txt)
+- Complete technical spec & API reference: [llms-full.txt](llms-full.txt)
+- Drop-in agent skill file: [SKILL.md](SKILL.md)
+
+## Verification & Reproducibility
+
+```bash
+make test                    # C11 ASan+UBSan (NEON & Scalar) + <1e-12 parity + 29 pytest tests
+make lint                    # clang -Wall -Wextra -Wpedantic -Werror + ruff + mypy
+python3 benchmarks/run_all.py
+```
 
 ## Verified Apple M4 Benchmarks
 
@@ -119,126 +230,6 @@ We credit strong compiled incumbents in each individual silo (`river` Rust, `con
 | Sleeping Fixed-Share BOA + Rogue Agent Quarantine | — | — | — | — | — | **Yes** |
 | Exact $L_\infty \le \epsilon$ Swing PLA + Lossless `zoom()` | — | — | — | PLA only | Delta text | **Yes + Wake Gate** |
 | Zero Runtime Deps + 101 KB CLI + Stdio MCP Server | No | No | R only | CLI/lib | Python | **Yes (0 deps)** |
-
----
-
-## Install
-
-```bash
-# Python C11/SIMD extension (zero runtime dependencies, auto-enables NEON on arm64)
-python3 -m pip install --no-build-isolation -e .
-
-# Optional x86_64 AVX2 build:
-CHRONOSIEVE_AVX2=1 python3 -m pip install --no-build-isolation -e .
-
-# Native 101 KB C11 CLI binary:
-make cli
-```
-
----
-
-## Optional repeated-alarm escalation
-
-The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into KthWake. It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
-
-From a ChronoSieve checkout with CPython, setuptools, wheel and C/C++17 compilers:
-
-```bash
-KTHWAKE_SOURCE='git+https://github.com/pgg898200-ship-it/chronosieve.git@7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f#subdirectory=companions/kthwake'
-python3 -m pip install --no-build-isolation . "${KTHWAKE_SOURCE}"
-python3 examples/alarm_escalation.py
-python3 examples/verify_alarm_escalation.py
-```
-
-Set `KTHWAKE_SOURCE` to a local source checkout for development. Pass `--stdin` to replay JSONL rows with `t_ms` and `residual`. Supply observations in nondecreasing timestamp order. The example groups alarms at equal timestamps and emits silent-period updates at their logical deadlines when more data arrives or input closes. A live event loop can arm its timer at `Index.next_expiry()`.
-
-## Quickstarts
-
-### 1. Python Zero-Copy Batch & Multi-Agent Pipeline (Zero Dependencies)
-
-```python
-import array
-import chronosieve as cs
-
-# 1) 110M+ ticks/sec zero-copy Catoni E-Detector (works with stdlib array.array OR NumPy)
-xs = array.array("d", [0.0] * 1000 + [2.5] * 100)
-alarms = bytearray(len(xs))
-det = cs.EDetector(family="catoni", mu0=0.0, sigma=1.0, threshold=500.0)
-res = det.ingest_batch(xs, out_alarms=alarms)
-print("First certified shift tick:", alarms.index(1), "ARL >= 500")
-
-# 2) Unified multi-agent pipeline: Sleeping BOA + Pre-Control E-Reset PID + COMA + Swing PLA
-pipe = cs.ChronoSieve(channel="gpu_temp", n_agents=3, alpha=0.10, epsilon=0.05)
-out = pipe.step(
-    t=42.0,
-    y=71.2,
-    preds=[71.0, 71.4, 95.0],       # Agent 2 hallucinating
-    active=[1, 0, 1],               # Agent 1 sleeping asynchronously
-    agent_intervals=[(70.5, 71.5), (70.8, 72.0), (94.0, 96.0)],
-)
-if out["should_wake"]:
-    print(out["digest_markdown"])   # ~195-token Markdown packet for System-2 LLM
-    raw = pipe.zoom(35.0, 42.0)     # Exact lossless ring-buffer drill-down
-```
-
-### 2. Native 101 KB C11 CLI
-
-```bash
-./chronosieve info
-printf '0.1\n-0.2\n0.0\n3.5\n3.8\n4.1\n' | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 50 --json
-seq 1 200 | awk '{print $1 "," ($1==120 ? 50.0 : sin($1*0.05))}' | ./chronosieve digest --eps 0.05 --channel sensor_0
-./chronosieve bench --n 2000000
-```
-
-### 3. Zero-Dependency Stdio MCP Server
-
-```bash
-python3 -m chronosieve.mcp_server
-# or installed entrypoint:
-chronosieve-mcp
-```
-
-Add to Claude Desktop / Cursor / any MCP client:
-
-```json
-{
-  "mcpServers": {
-    "chronosieve": {
-      "command": "python3",
-      "args": ["-m", "chronosieve.mcp_server"]
-    }
-  }
-}
-```
-
-Tools exposed: `chronosieve_create_channel`, `chronosieve_ingest`, `chronosieve_zoom`, `chronosieve_digest`, `chronosieve_coma`, `chronosieve_status`.
-
-### 4. Pure C11 Embedding
-
-```c
-#include "chronosieve.h"
-// Link csrc/edetector.c csrc/conformal.c csrc/fuser.c csrc/digest.c -lm
-```
-
----
-
-## Route a wakeup to a worker
-
-ChronoSieve can signal when a stream changes. [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can combine that alarm with capacity, queue depth, or another integer condition and emit one enter/exit event per affected worker. The [runnable integration example](https://github.com/pgg898200-ship-it/chronosieve/blob/releases/guardshift/guardshift/examples/chronosieve_routing.py) feeds a batch through `EDetector` and dispatches the first alarm when capacity is available. [Try atomic updates in the browser](https://huggingface.co/spaces/pgg-engineering/guardshift).
-
-## For AI & Coding Agents
-
-- Machine-readable index: [llms.txt](llms.txt)
-- Complete technical spec & API reference: [llms-full.txt](llms-full.txt)
-- Drop-in agent skill file: [SKILL.md](SKILL.md)
-
-## Verification & Reproducibility
-
-```bash
-make test                    # C11 ASan+UBSan (NEON & Scalar) + <1e-12 parity + 29 pytest tests
-make lint                    # clang -Wall -Wextra -Wpedantic -Werror + ruff + mypy
-python3 benchmarks/run_all.py
-```
 
 ## License
 
