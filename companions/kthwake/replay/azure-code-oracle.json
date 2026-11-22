@@ -1,0 +1,46 @@
+{
+  "heartbeat_ms": 0,
+  "last_arrival_ms": 3435948,
+  "scenarios": {
+    "burst": {
+      "distinct_ks": 8,
+      "distinct_rules": 4096,
+      "distinct_windows": 4096,
+      "edge_sha256": "c4c7046d24f0866aa18125ceb81011a5e957be31e692bbe0bf362ce376b55eda",
+      "falling": 107017,
+      "final_active": 0,
+      "guards": 4096,
+      "guards_sha256": "34c5d704ec8dc54e124da86918d9d7ecf8967bad03d65676a52e7f1f67ac4be0",
+      "rising": 107017
+    },
+    "shared": {
+      "distinct_ks": 42,
+      "distinct_rules": 64,
+      "distinct_windows": 8,
+      "edge_sha256": "c150f4266051db762d33dd8bf610262cf0a94ca2b72b85bcf79a2e1c6af32c72",
+      "falling": 304000,
+      "final_active": 0,
+      "guards": 4096,
+      "guards_sha256": "65f4c5be6c2b454aefaa548f684392df151415f4eb83bdb3f0f798aec68c988d",
+      "rising": 304000
+    },
+    "varied": {
+      "distinct_ks": 649,
+      "distinct_rules": 4096,
+      "distinct_windows": 4096,
+      "edge_sha256": "27a69fb7fc5e0f46c7bbbc50f154234cb88cce7f1c309f122aaea2c0481dc4be",
+      "falling": 129463,
+      "final_active": 0,
+      "guards": 4096,
+      "guards_sha256": "e5461ea06a8b1f0fe4ae98a27d656df9ce6676ce4e3287a9c9d48c971a3e5a65",
+      "rising": 129463
+    }
+  },
+  "source": "https://raw.githubusercontent.com/Azure/AzurePublicDataset/5d7424495ca07a30c89d30a2a534ac0d0d3a5e3e/data/AzureLLMInferenceTrace_code.csv",
+  "source_distinct_times": 7811,
+  "source_requests": 8819,
+  "source_sha256": "54e9a6d2a4bd06ba1e060304b900abbc74cbea53de96506e60fe5bb4f2277fb6",
+  "ticks": 7812,
+  "ticks_sha256": "1f697c8527b6edf41667f6a881dddeb36a57e48703533623baff3a39a5608aa7",
+  "trace": "azure-code"
+}

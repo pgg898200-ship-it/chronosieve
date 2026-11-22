@@ -1,0 +1,4 @@
+# ID 0: wake after three tool results inside 20 ms
+3,20
+# ID 1: report any activity in the past 5 ms
+1,5

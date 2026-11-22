@@ -1,0 +1,46 @@
+{
+  "heartbeat_ms": 0,
+  "last_arrival_ms": 3536999,
+  "scenarios": {
+    "burst": {
+      "distinct_ks": 8,
+      "distinct_rules": 4096,
+      "distinct_windows": 4096,
+      "edge_sha256": "45e6b559af69d75d5d0b4b31633df05048fceda4a15474978e4a32783e75620f",
+      "falling": 23331,
+      "final_active": 0,
+      "guards": 4096,
+      "guards_sha256": "34c5d704ec8dc54e124da86918d9d7ecf8967bad03d65676a52e7f1f67ac4be0",
+      "rising": 23331
+    },
+    "shared": {
+      "distinct_ks": 42,
+      "distinct_rules": 64,
+      "distinct_windows": 8,
+      "edge_sha256": "9eac729b4b63437650acf1d7b2901af0b54848815cfcfa99f62cd598adf97b85",
+      "falling": 202432,
+      "final_active": 0,
+      "guards": 4096,
+      "guards_sha256": "65f4c5be6c2b454aefaa548f684392df151415f4eb83bdb3f0f798aec68c988d",
+      "rising": 202432
+    },
+    "varied": {
+      "distinct_ks": 649,
+      "distinct_rules": 4096,
+      "distinct_windows": 4096,
+      "edge_sha256": "d4dda019ea41094ac36fffe4feae562cbbf38052f8254afb5fab97ff06762707",
+      "falling": 89988,
+      "final_active": 0,
+      "guards": 4096,
+      "guards_sha256": "e5461ea06a8b1f0fe4ae98a27d656df9ce6676ce4e3287a9c9d48c971a3e5a65",
+      "rising": 89988
+    }
+  },
+  "source": "https://raw.githubusercontent.com/kvcache-ai/Mooncake/e94a0b86ba067455d8b0524eb2cbb5fbac2db024/FAST25-release/traces/toolagent_trace.jsonl",
+  "source_distinct_times": 1180,
+  "source_requests": 23608,
+  "source_sha256": "48a2db1a13d3bc05e6330140c64f604ba366df20d3c9e128b5c35a01c1fa5f71",
+  "ticks": 1181,
+  "ticks_sha256": "3663b8b6fa6acdf22b3da0c98aed1521b8831e2720b8938e393f0d25641dc5fd",
+  "trace": "mooncake"
+}

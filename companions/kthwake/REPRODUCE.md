@@ -1,0 +1,11 @@
+# Reproduce KthWake on another machine
+
+The most valuable rerun uses an independently selected event stream, unchanged rules and a competing implementation. A failure or slower result is as informative as a win. To reproduce the included numbers, run the exact commands and flags in EVIDENCE.md first.
+
+1. Record CPU, OS, compiler/version, flags and the release SHA-256. Pin a core if available. Keep construction time separate from stepping and output serialization.
+2. Describe the stream or share a publishable sequence of integer timestamps and arrival counts. Describe the number of subscribers, distinct thresholds and distinct windows. Keep operator telemetry private unless you have permission to redistribute it.
+3. State whether you measured snapshots at arrivals or every idle deadline. Verify the ordered-by-time edge set including IDs and state before collecting timings.
+4. Include each repetition, median elapsed time and p99 when available for each implementation. Report rebuild/setup cost, intermittent stalls and losses.
+5. Post a public benchmark link or a reproducible issue in the [KthWake Space community](https://huggingface.co/spaces/pgg-engineering/kthwake/discussions). An integration is easiest to verify when it links to executable source and records which work KthWake replaced.
+
+First-party runs and the provided public input traces are development evidence. The project's organic adoption count starts with a link to the first independent integration.
