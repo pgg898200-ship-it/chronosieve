@@ -1,0 +1,194 @@
+# ChronoSieve — Complete Technical Reference (`llms-full.txt`)
+
+Version: `0.1.0` | License: MIT | Runtime dependencies: **0** (C11 + Python stdlib)
+SIMD Backends: ARM64 NEON (`float64x2_t`), x86_64 AVX2 (`__m256d`, optional FMA), Portable Scalar (`CS_FORCE_SCALAR=1`).
+Verified SIMD vs. Scalar numerical parity: NEON `max_rel = 1.136e-15`, x86_64 AVX2 `max_rel = 7.848e-16` (`< 1e-12`).
+
+---
+
+## 1. Architecture & Mathematical Guarantees
+
+ChronoSieve combines four streaming statistical engines designed for high-frequency System-1 ingestion and low-token System-2 LLM orchestration.
+
+### Module 1: Zero-`exp` SIMD E-Detectors & Cross-Agent E-Fusion (`csrc/edetector.c`)
+
+Evaluates a 16-lane betting grid $\lambda_0, \dots, \lambda_{15}$ (128 bytes = 1 Apple M4 L1 cache line) with two accumulators:
+
+- **E-SR (Shiryaev-Roberts, zero `exp`)**:
+  $$R_t^{(m)} = (R_{t-1}^{(m)} + 1) e_t^{(m)}, \qquad R_t = \frac{1}{16}\sum_{m=0}^{15} R_t^{(m)}$$
+  Stopping at $\tau = \inf\{t : R_t \ge \gamma\}$ guarantees $\mathbb{E}_{H_0}[\tau] = \text{ARL} \ge \gamma$.
+- **Log-Domain E-CUSUM**:
+  $$S_t^{(m)} = \max(0, S_{t-1}^{(m)}) + \log(\max(e_t^{(m)}, 10^{-300})), \qquad C_t = \frac{1}{16}\sum_{m=0}^{15} \exp(S_t^{(m)})$$
+  Reporting the valid mixture $\frac{1}{16}\sum_m \exp(S_t^{(m)})$ guarantees $\text{ARL} \ge \gamma$.
+
+Four zero-`exp` e-value families:
+
+1. `family="bounded"` ($Z_t \in [0, 1]$, known $\mu_0 \in (0, 1)$): $e_t(\lambda) = 1 + \lambda(Z_t - \mu_0)$.
+2. `family="catoni"` (Wang & Ramdas 2023; known $\mu_0, \sigma > 0$, ANY finite-variance distribution):
+   $$e_t(\lambda) = \frac{\psi(\lambda(X_t - \mu_0))}{1 + \frac{1}{2}\lambda^2\sigma^2}, \qquad \psi(y) = \begin{cases} 1 + y + \frac{1}{2}y^2 & y \ge 0 \\ (1 - y + \frac{1}{2}y^2)^{-1} & y < 0 \end{cases}$$
+   Branchless NEON/AVX2 evaluation; zero `exp()`. Finite-warmup calibration via `EDetector.calibrate_catoni(warmup, threshold, side, inflation_z=2.5)` applies kurtosis-aware variance inflation and conservative one-sided mean bounds.
+3. `family="symmetry"` (known $\mu_0$, unknown/infinite variance including Cauchy):
+   $$e_t(\lambda) = 1 + \frac{\lambda(X_t - \mu_0)}{1 + |\lambda(X_t - \mu_0)|}$$
+4. `family="vovk_rank"` (unknown $\mu$, unknown $\sigma$, arbitrary continuous/discrete/heavy-tailed/multimodal streams):
+   Exact tie-randomized smoothed conformal p-value via arena-backed $O(\log n)$ Order-Statistic B-tree (`CS_BTREE_T = 16`, duplicate multiplicity counts, deterministic `xoshiro256**` PRNG):
+   $$p_t = \frac{\#\{i < t : X_i < X_t\} + U_t(1 + \#\{i < t : X_i = X_t\})}{t}, \qquad e_t(\lambda) = 1 + \lambda(1 - 2p_t), \quad |\lambda| < 1$$
+   Deterministic epoch reset every `max_prefix` (default `65536`) ticks clears the B-tree (not $R_t$), preserving exact i.i.d. $\text{Uniform}(0,1)$ p-values in strictly bounded memory.
+5. `family="auto"`: routes to `catoni` if finite `(mu0, sigma > 0)` are provided, else `vovk_rank`.
+
+**Cross-Agent E-Fusion (`EFusion`)** — valid under arbitrary unknown cross-agent correlation (verified at $K=8, \rho=0.85$):
+- `mode="step"`: $\mathcal{F}_{t-1}$-predictable convex combination $\bar{e}_t^{(m)} = \sum_{k=1}^K w_{t,k} e_{t,k}^{(m)}$ fed into shared E-SR/E-CUSUM (supports optional time-varying $\mathcal{F}_{t-1}$-predictable per-step weights).
+- `mode="process"`: convex average of per-agent E-SR wealth $\bar{R}_t = \sum_{k=1}^K w_k R_t^{(k)}$ (rank-safe and works across heterogeneous families; requires fixed prior weights $w_k$ and rejects per-step weight overrides to preserve $\text{ARL} \ge \gamma$).
+
+### Module 2: Pre-Control E-Reset Conformal PID + Multi-Agent COMA (`csrc/conformal.c`)
+
+- **Conformal PID** (Angelopoulos et al., NeurIPS 2023):
+  - Pre-control nonconformity score $s_t = |y_t - \hat{y}_t|$, miscoverage $\text{err}_t = \mathbb{I}\{s_t > q_t\}$, cumulative error $E_t = \sum_{i=1}^t (\text{err}_i - \alpha)$.
+  - $q_{t+1} = \max\left(0, \eta E_t + K_i \tan\left(\text{clip}\left(\frac{E_t \log(t+2)}{C_{\text{sat}}(t+1)}, -\frac{\pi}{2}+\delta, \frac{\pi}{2}-\delta\right)\right) + \hat{q}_{t+1}^D\right)$.
+- **CRITICAL Pre-Control E-Reset Invariant**:
+  - NEVER feed closed-loop PID miscoverage $\text{err}_t$ into the E-detector.
+  - NEVER reset $E_t$ or boost $\eta$.
+  - Feed ONLY exogenous pre-control $s_t$ into a Vovk Rank E-detector. On certified shift, reset ONLY the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ to the post-shift empirical $(1-\alpha)$ quantile, then enforce mandatory calibration warmup $W_{\text{cal}} \ge 32$ before re-arming.
+- **Multi-Channel SoA SIMD Kernel (`ConformalBatchPID`)**: Structure-of-Arrays NEON/AVX2 update with branchless `[3/4]` Gauss continued-fraction rational `vtan_clamped_f64` (`max_rel = 7.77e-16`), achieving **418.8 M ch-ticks/s** (2.39 ns) Native CLI / **402.8 M ch-ticks/s** (2.48 ns) Python `Py_buffer` on Apple M4 ($C=64$).
+- **Online COMA (`coma_merge`)** (Gasparin & Ramdas, UAI 2024): $O(K \log K)$ sweep-line weighted majority vote returning exact disjoint interval union, convex hull, and maximum agreement weight. Supports deterministic $\tau \in [0, 1]$ and randomized $U \sim \text{Uniform}[0.5, 1)$ (strictly tighter intervals while maintaining coverage $\ge 1 - 2\alpha$ under arbitrary dependence).
+
+### Module 3: SIMD Sleeping Fixed-Share BOA + Per-Agent Drift Attribution (`csrc/fuser.c`)
+
+- Asynchronous active mask $a_{t,k} \in \{0, 1\}$ (sleeping agents' predictions may be `NaN` and receive zero imputed excess loss $r_{t,k} = 0$, preserving sleeping-expert zero-regret bounds).
+- Self-normalizing Bernstein learning rates $\eta_{t,k} = \min\left(\frac{1}{2E_t}, \sqrt{\frac{\log K}{V_{t,k} + E_t^2}}\right)$, second-order exponent $z_k = -\eta_{t,k} r_{t,k} - (\eta_{t,k} r_{t,k})^2$, vectorized degree-12 Estrin/Cephes `cs_vexp_f64` (`max_rel = 4.71e-16`), and shift-coupled Fixed-Share mixing $\gamma_{\text{shift}}$ + variance decay.
+- Family-wise Bonferroni-safe per-agent upper one-sided Catoni E-detector (threshold $K \cdot \gamma_{\text{rogue}}$) on $|y_t - \hat{y}_{t,k}|$ with automatic finite-warmup calibration and optional automatic quarantine of hallucinating agents.
+
+### Module 4: Anomaly-Preserving Swing PLA + Wake-Up Gate + Ring-Buffer `zoom()` (`csrc/digest.c`)
+
+- Online Swing PLA maintains feasible slope cone $[m_{\min}, m_{\max}]$ with internal guard $\epsilon_{\text{eff}} = \epsilon(1 - 10^{-12})$ and clamped $L_2$ slope selection, guaranteeing $|y_i - \hat{y}(t_i)| \le \epsilon$ strictly for every normal tick.
+- Any tick flagged `FLAG_ANOMALY` flushes the open segment, records verbatim `(t, y, y_hat, residual, q_t, edet_stat, flags)`, and emits a pinned 1-point segment with `0.0` reconstruction error.
+- Circular fixed-memory ring buffer (`ring_capacity`, default 65536) supports $O(\log N)$ lossless `zoom(t0, t1)` with explicit `truncated` eviction indicator.
+- Wake-Up Gate emits 0 packets during stationary regimes and ~195–200-token (`chars/4`) Markdown packets with explicit `zoom(channel, t0, t1)` handles on certified shifts, newly flagged rogue agents, or anomaly bursts.
+
+---
+
+## 2. Python API Reference (Zero Runtime Dependencies)
+
+All batch methods accept zero-copy C-contiguous `Py_buffer` inputs (`array.array('d')`, `memoryview`, `bytearray`, `numpy.ndarray`) and release the Python GIL during C execution.
+
+```python
+import chronosieve as cs
+
+# Module introspection
+cs.version()       # "0.1.0"
+cs.simd_backend()  # "NEON" | "AVX2" | "SCALAR"
+
+# 1. EDetector
+det = cs.EDetector(
+    family="auto",       # "auto" | "bounded" | "catoni" | "symmetry" | "vovk_rank"
+    accum="esr",         # "esr" | "ecusum"
+    side="two_sided",    # "two_sided" | "upper" | "lower"
+    threshold=1000.0,
+    mu0=float("nan"),
+    sigma=float("nan"),
+    max_prefix=65536,
+    seed=0x517CC1B727220A95,
+    auto_reset=False,
+)
+det = cs.EDetector.calibrate_catoni(warmup, threshold=1000.0, side="two_sided", inflation_z=2.5)
+det.step(x) -> dict
+det.ingest_batch(xs, out_stats=None, out_alarms=None) -> dict
+det.reset() -> None
+det.reset_accum() -> None  # resets accumulator lanes while preserving Vovk Rank B-tree baseline
+
+# 2. Cross-Agent EFusion
+fus = cs.EFusion(n_agents=8, mode="step", family="catoni", mu0=0.0, sigma=1.0, threshold=500.0)
+fus.step(x_agents, weights=None) -> dict
+fus.ingest_batch(x_matrix, out_stats=None, out_alarms=None) -> dict
+
+# 3. Pre-Control E-Reset ConformalPID & SoA Batch & COMA
+cp = cs.ConformalPID(alpha=0.10, eta=0.05, ki=1.0, c_sat=1.0, score_bound=1e6,
+                     edet_threshold=500.0, warmup_cal=32, score_window=128, enable_ereset=True)
+cp.step(y_true, y_pred) -> dict
+cp.ingest_batch(y_true, y_pred, out_q_used=None, out_q_next=None, out_miscov=None, out_resets=None) -> dict
+
+soa = cs.ConformalBatchPID(n_channels=64, alpha=0.10, eta=0.05)
+soa.ingest_batch(y_true_TxC, y_pred_TxC, out_q_next=None, out_miscov=None) -> int
+
+coma = cs.coma_merge(lowers, uppers, weights=None, tau=0.5, randomized=False, seed=42)
+# -> {"intervals": [(lo, hi), ...], "hull": (lo, hi) | None, "max_agreement": float, "used_tau": float}
+
+# 4. SleepingBOA
+boa = cs.SleepingBOA(n_agents=8, share_base=0.01, share_shift=0.35, rogue_threshold=200.0, quarantine_rogue=True)
+boa.predict(preds, active=None) -> float
+boa.step(preds, y_true, active=None, shift_detected=False) -> dict
+boa.fuse_batch(preds_matrix, y_true, active_matrix=None, shifts=None, out_preds=None, out_rogue_any=None) -> dict
+boa.weights() -> list[float]
+boa.rogue_stats() -> tuple[list[float], list[bool]]
+boa.clear_rogue(agent_idx=-1) -> None
+
+# 5. StreamDigest
+dig = cs.StreamDigest(epsilon=0.05, ring_capacity=65536, max_segments=4096, max_anomalies=1024,
+                      wake_cooldown=0, anomaly_burst=1)
+dig.push(t, y, y_hat=None, q_t=float("nan"), edet_stat=0.0, flags=0) -> dict
+dig.digest_batch(ts, ys, y_hats=None, qs=None, edet_stats=None, flags=None, out_wakes=None) -> dict
+dig.reconstruct(ts, out_y=None) -> list[float] | None
+dig.zoom(t0, t1) -> {"records": [...], "truncated": bool}
+dig.format_markdown(channel="stream", ...) -> str
+
+# 6. Unified Pipeline
+pipe = cs.ChronoSieve(channel="gpu_temp", n_agents=3, alpha=0.10, epsilon=0.05, edet_threshold=500.0)
+pipe.step(t, y, preds=..., active=..., agent_intervals=...) -> dict
+pipe.zoom(t0, t1) -> dict
+pipe.format_markdown() -> str
+pipe.status() -> dict
+```
+
+---
+
+## 3. Native CLI & Stdio MCP Server
+
+### CLI (`./chronosieve`, 101 KB stripped on macOS arm64)
+
+- `chronosieve info` — version & active SIMD backend.
+- `chronosieve detect [--family auto|catoni|bounded|symmetry|rank] [--accum esr|ecusum] [--side both|upper|lower] [--mu0 V] [--sigma S] [--threshold G] [--auto-reset] [--json] [file]`
+- `chronosieve conformal [--alpha A] [--eta E] [--threshold G] [--no-ereset] [--json] [file]`
+- `chronosieve digest [--eps E] [--channel NAME] [--threshold G] [--alpha A] [--zoom T0:T1] [file]`
+- `chronosieve bench [--n N]`
+
+### MCP Server (`python3 -m chronosieve.mcp_server` / `chronosieve-mcp`)
+
+Supports both newline-delimited JSON-RPC 2.0 (MCP 2024-11-05+) and `Content-Length` framing over stdio.
+Tools:
+- `chronosieve_create_channel`: create/reset channel (`channel`, `n_agents`, `alpha`, `eta`, `epsilon`, `edet_threshold`, `rogue_threshold`, `ring_capacity`, `anomaly_burst`, `wake_cooldown`).
+- `chronosieve_ingest`: ingest batch (`channel`, `ts`, `ys`, optional `preds`, `active`, `force_markdown`).
+- `chronosieve_zoom`: lossless $O(\log N)$ ring-buffer retrieval (`channel`, `t0`, `t1`).
+- `chronosieve_digest`: retrieve latest Markdown digest (`channel`, `max_segments`, `max_anomalies`).
+- `chronosieve_coma`: run $O(K \log K)$ COMA consensus (`lowers`, `uppers`, optional `weights`, `tau`, `randomized`, `seed`).
+- `chronosieve_status`: inspect one or all channels + SIMD backend.
+
+---
+
+## 4. Choosing the Right E-Detector Family
+
+| What you know about the null stream $H_0$ | Recommended family |
+|---|---|
+| Bounded in $[0, 1]$ with known null mean $\mu_0$ | `bounded` |
+| Finite variance with known $(\mu_0, \sigma)$ (even Student-$t_3$, skewed) | `catoni` (fastest: 8.47–9.03 ns/tick Py batch, 8.82 ns/tick CLI) |
+| Finite variance, unknown $(\mu, \sigma)$, have warmup window $W \ge 48$ | `EDetector.calibrate_catoni(warmup)` |
+| Symmetric around known $\mu_0$, unknown/infinite variance (e.g. Cauchy) | `symmetry` |
+| Unknown $\mu$, unknown $\sigma$, heavy tails, discrete ties, or multimodal | `vovk_rank` (or `auto`) |
+| $K$ correlated agents (e.g. $\rho = 0.85$) | `EFusion(mode="step")` (Catoni) or `EFusion(mode="process")` (Vovk Rank) |
+
+---
+
+## 5. Verified Apple M4 Numbers (`benchmarks/results_m4.json`)
+
+- **Catoni E-SR 16-lane**: **8.82 ns/tick** (113.4 M/s) Native C11 CLI | **8.47 ns/tick** (118.1 M/s) Python `array.array` | **9.03 ns/tick** (110.7 M/s) Python NumPy | **347.8 ns/tick** CPython scalar `step()` | **936.6 ns/tick** Pure Python ref.
+- **Vovk Rank B-tree (65k cap)**: **114.4 ns/tick** (8.74 M/s) Native C11 CLI | **115.5 ns/tick** (8.66 M/s) Python `Py_buffer` batch.
+- **Conformal PID SoA ($C=64$)**: **2.39 ns/ch-tick** (418.8 M ch-ticks/s) Native C11 CLI | **2.48 ns/ch-tick** (402.8 M ch-ticks/s) Python `Py_buffer` batch.
+- **Pre-Control E-Reset Conformal PID (1-ch + Vovk Rank)**: **127.3 ns/tick** (7.86 M/s) Python batch (beats Pure Python vanilla PID at 190.3 ns/tick); 4k-tick 3-shock coverage **0.901** (target 0.900); post-5x-shock 100-tick coverage **0.850** vs **0.650** Rolling-D PID (+20 pp) vs **0.390** pure P+I PID (+46 pp).
+- **Sleeping BOA + Catoni ($K=8$)**: **180.74 ns/step** (5.53 M/s) Native C11 CLI | **181.56 ns/step** (5.51 M/s) Python `fuse_batch`; exact rogue agent isolation in **1 tick** (post-quarantine MAE **0.084**).
+- **Online COMA ($K=8$)**: **557.4 ns/call** (1.79 M/s) Python `coma_merge()`.
+- **Swing PLA + Ring Buffer**: **6.17 ns/tick** (162.0 M/s) Native C11 CLI | **6.69 ns/tick** (149.5 M/s) Python `digest_batch`; max $L_\infty = 0.050000 \le 0.05$, anomaly error `0.0`, 28.1x PLA compression.
+- **Real-World `statsmodels` Benchmarks**:
+  - **Mauna Loa CO2 ($N=2,225, \epsilon=1.0$ ppm, full-series, no wake gating)**: Native Swing PLA Digest = 107 segments (20.8x PLA), verified exact C $L_\infty = 1.000000 \le 1.00$ ppm (1.0004 ppm reconstructed directly from rendered 6-sig-fig Markdown); **91.6% BPE-proxy / 88.3% `chars/4`** reduction vs Raw JSON (**71.9% BPE / 58.2% `c/4`** beyond TSLN).
+  - **Nile Annual Flow (1871–1970, $N=100$, 1898 Aswan Dam)**: Vovk Rank ($\gamma=50$, 0 priors) alarms in **1905** (+7 yrs, **0** pre-1899 false alarms); Vovk Rank ($\gamma=100$) and default two-sided Calibrated Catoni ($\gamma=100, z=2.5$) alarm in **1907** (+9 yrs, **0** pre-1899 FA).
+  - **Annual Sunspots (1732–2008, strictly causal 32-yr warmup, $N=277$ OOS, lag-1 persistence)**: Pre-Control E-Reset PID coverage **0.906** (3 resets) vs Rolling-D PID **0.888** vs Pure P+I PID **0.866** (target 0.900).
+- **10,000-Tick Synthetic Telemetry Token Reduction**:
+  - **High-Recall (`burst=1`, 25 pkts)**: **93.7% BPE-proxy / 91.2% `chars/4`** vs Raw JSON (**76.6% BPE / 63.1% `c/4`** beyond TSLN); **100% (3/3)** pinned AND **100% (3/3)** wake-packet spike recall.
+  - **Wake-Up Gated (`burst=2`, 14 pkts)**: **96.3% BPE-proxy / 95.0% `chars/4`** vs Raw JSON (**86.5% BPE / 78.9% `c/4`** beyond TSLN); **100% (3/3)** pinned verbatim for `zoom()`, **0% (0/3)** isolated 1-tick spike wakes by design.

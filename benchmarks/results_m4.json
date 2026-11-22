@@ -1,0 +1,304 @@
+{
+  "throughput": {
+    "platform": "macOS-15.3.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.14.6",
+    "simd_backend": "NEON",
+    "n_batch": 1000000,
+    "n_scalar": 100000,
+    "kernels": {
+      "catoni_esr_batch_numpy": {
+        "ns_per_tick": 9.03325,
+        "m_ticks_per_sec": 110.70212824841558
+      },
+      "catoni_esr_batch_stdlib_array": {
+        "ns_per_tick": 8.469795,
+        "m_ticks_per_sec": 118.0666120018253
+      },
+      "catoni_esr_cpython_scalar_step": {
+        "ns_per_tick": 347.81292,
+        "m_ticks_per_sec": 2.8751088372450337
+      },
+      "catoni_esr_pure_python_ref": {
+        "ns_per_tick": 936.5833,
+        "m_ticks_per_sec": 1.0677106884139402
+      },
+      "vovk_rank_btree_batch": {
+        "ns_per_tick": 115.48625,
+        "m_ticks_per_sec": 8.659039496043901
+      },
+      "conformal_pid_soa_64ch_batch": {
+        "ns_per_ch_tick": 2.482792,
+        "m_ch_ticks_per_sec": 402.7723627271233
+      },
+      "conformal_pid_ereset_1ch_batch": {
+        "ns_per_tick": 127.28916,
+        "m_ticks_per_sec": 7.856128518720683
+      },
+      "conformal_pid_pure_python_ref": {
+        "ns_per_tick": 190.27085,
+        "m_ticks_per_sec": 5.255665804825069
+      },
+      "sleeping_boa_k8_batch": {
+        "ns_per_step": 181.55958,
+        "m_steps_per_sec": 5.507833847159153
+      },
+      "coma_merge_k8_python_call": {
+        "ns_per_call": 557.3725,
+        "m_calls_per_sec": 1.7941322903444286
+      },
+      "swing_pla_ringbuf_batch": {
+        "ns_per_tick": 6.689708,
+        "m_ticks_per_sec": 149.48335562628444
+      }
+    },
+    "native_cli_bytes": 103712,
+    "native_cli_bench_stdout": "ChronoSieve Native C11 Benchmark (N=2000000, SIMD=NEON)\n  Catoni E-SR (16-lane):        8.82 ns/tick  (  113.4 M ticks/s)  stat=630.605\n  Vovk Rank B-tree (65k cap): 114.42 ns/tick  (   8.74 M ticks/s)  stat=25748.667\n  Conformal PID SoA (C=64):     2.39 ns/ch-tk (  418.8 M ch-tk/s)\n  Sleeping BOA + Catoni (K=8):180.74 ns/step  (   5.53 M steps/s)  y_hat=0.101\n  Swing PLA + RingBuf:          6.17 ns/tick  (  162.0 M ticks/s)  segs=25337"
+  },
+  "math_proofs": {
+    "gamma": 200.0,
+    "edetectors": {
+      "bounded_beta23": {
+        "arl_lower_bound": 212.07,
+        "arl_median": 220.5,
+        "add_mean": 9.07,
+        "add_median": 9.0
+      },
+      "catoni_student_t3": {
+        "arl_lower_bound": 306.74,
+        "arl_median": 294.0,
+        "add_mean": 6.275,
+        "add_median": 6.0
+      },
+      "symmetry_cauchy": {
+        "arl_lower_bound": 232.925,
+        "arl_median": 206.0,
+        "add_mean": 14.245,
+        "add_median": 12.0
+      },
+      "vovk_rank_discrete_cauchy": {
+        "arl_lower_bound": 215.635,
+        "arl_median": 214.0,
+        "add_mean": 18.655,
+        "add_median": 17.0
+      },
+      "ecusum_catoni_t3": {
+        "arl_lower_bound": 2256.15,
+        "arl_median": 2500.0,
+        "add_mean": 8.93,
+        "add_median": 9.0
+      }
+    },
+    "efusion": {
+      "k8_rho85_step_catoni": {
+        "arl_lower_bound": 266.125,
+        "add_mean": 6.31875
+      },
+      "k8_rho85_process_rank": {
+        "arl_lower_bound": 215.7375,
+        "add_mean": 9.31875
+      }
+    },
+    "conformal_pid": {
+      "target_coverage": 0.9,
+      "ereset_full_coverage": 0.90125,
+      "rolling_d_pid_full_coverage": 0.8995,
+      "pure_pid_full_coverage": 0.876,
+      "ereset_shock_100t_coverage": 0.85,
+      "rolling_d_pid_shock_100t_coverage": 0.65,
+      "pure_pid_shock_100t_coverage": 0.39,
+      "ereset_resets": 14
+    },
+    "coma_k5": {
+      "theory_floor": 0.8,
+      "det_coverage": 0.9013333333333333,
+      "rand_coverage": 0.8646666666666667,
+      "det_mean_width": 3.531650509801526,
+      "rand_mean_width": 3.205666438924458
+    },
+    "sleeping_boa": {
+      "rogue_detected_delay": 1,
+      "rogue_isolated_exact": true,
+      "post_quarantine_mae": 0.08422878499343485
+    },
+    "swing_pla": {
+      "epsilon": 0.05,
+      "max_linf_err": 0.04999999999994995,
+      "max_anomaly_err": 0.0,
+      "compression_ratio": 28.089887640449437,
+      "segments": 356
+    },
+    "real_world_statsmodels": {
+      "available": true,
+      "nile_aswan_1898": {
+        "dataset": "statsmodels.datasets.nile (Nile Annual Flow 1871-1970, 1898 Aswan Dam)",
+        "n_obs": 100,
+        "changepoint_year": 1898,
+        "pre_1899_mean": 1097.75,
+        "post_1898_mean": 849.9722222222222,
+        "vovk_rank_gamma50": {
+          "gamma": 50.0,
+          "first_alarm_year": 1905,
+          "delay_years": 7,
+          "pre_1899_false_alarms": 0,
+          "max_stat": 7894776.980841841
+        },
+        "vovk_rank_gamma100": {
+          "gamma": 100.0,
+          "first_alarm_year": 1907,
+          "delay_years": 9,
+          "pre_1899_false_alarms": 0,
+          "max_stat": 7894776.980841841
+        },
+        "calibrated_catoni_gamma100": {
+          "gamma": 100.0,
+          "side": "two_sided",
+          "inflation_z": 2.5,
+          "warmup_years": "1871-1890",
+          "first_alarm_year": 1907,
+          "delay_years": 9,
+          "pre_1899_false_alarms": 0,
+          "max_stat": 4895507498246437.0
+        }
+      },
+      "sunspots_conformal_pid": {
+        "dataset": "statsmodels.datasets.sunspots (Annual Sunspot Activity 1700-2008)",
+        "total_obs": 309,
+        "warmup_years": "1700-1731 (N=32, causal scale & init_q only)",
+        "eval_years": "1732-2008",
+        "eval_obs": 277,
+        "target_coverage": 0.9,
+        "ereset_coverage": 0.9061371841155235,
+        "rolling_d_pid_coverage": 0.8880866425992779,
+        "pure_pid_coverage": 0.8664259927797834,
+        "ereset_resets": 3,
+        "ereset_mean_q": 40.76587155268108,
+        "rolling_d_pid_mean_q": 40.14342591545903,
+        "pure_pid_mean_q": 35.667319455985414
+      }
+    }
+  },
+  "tokens": {
+    "n_ticks": 10000,
+    "true_anomalies": [
+      1800,
+      5200,
+      8900
+    ],
+    "raw_json": {
+      "chars": 221684,
+      "chars_div_4": 55421,
+      "bpe_proxy_tokens": 163928
+    },
+    "raw_csv": {
+      "chars": 122820,
+      "chars_div_4": 30705,
+      "bpe_proxy_tokens": 53930
+    },
+    "tsln_style_delta": {
+      "chars": 52846,
+      "chars_div_4": 13211,
+      "bpe_proxy_tokens": 44530
+    },
+    "chronosieve_gated_burst2": {
+      "wake_packets": 14,
+      "chars": 11150,
+      "chars_div_4": 2787,
+      "bpe_proxy_tokens": 6000,
+      "avg_bpe_tokens_per_packet": 428.57142857142856,
+      "avg_chars4_tokens_per_packet": 199.07142857142858,
+      "reduction_vs_json_bpe_pct": 96.33985652237568,
+      "reduction_vs_json_chars4_pct": 94.97122029555584,
+      "reduction_vs_csv_bpe_pct": 88.87446690153902,
+      "reduction_vs_csv_chars4_pct": 90.92330239374695,
+      "reduction_vs_tsln_bpe_pct": 86.52593757017742,
+      "reduction_vs_tsln_chars4_pct": 78.90394368329423,
+      "injected_anomaly_recall_pinned": 1.0,
+      "injected_anomaly_recall_wake_packets": 0.0
+    },
+    "chronosieve_high_recall": {
+      "wake_packets": 25,
+      "chars": 19481,
+      "chars_div_4": 4870,
+      "bpe_proxy_tokens": 10404,
+      "avg_bpe_tokens_per_packet": 416.16,
+      "avg_chars4_tokens_per_packet": 194.8,
+      "reduction_vs_json_bpe_pct": 93.65331120979943,
+      "reduction_vs_json_chars4_pct": 91.21271720106097,
+      "reduction_vs_csv_bpe_pct": 80.70832560726868,
+      "reduction_vs_csv_chars4_pct": 84.13939097866798,
+      "reduction_vs_tsln_bpe_pct": 76.63597574668762,
+      "reduction_vs_tsln_chars4_pct": 63.136779956097186,
+      "injected_anomaly_recall_pinned": 1.0,
+      "injected_anomaly_recall_wake_packets": 1.0
+    },
+    "real_world_mauna_loa_co2": {
+      "available": true,
+      "dataset": "statsmodels.datasets.co2 (Mauna Loa Weekly CO2, 1958-2001)",
+      "n_obs": 2225,
+      "epsilon_ppm": 1.0,
+      "raw_json": {
+        "chars": 45616,
+        "chars_div_4": 11404,
+        "bpe_proxy_tokens": 35601
+      },
+      "raw_csv": {
+        "chars": 25593,
+        "chars_div_4": 6398,
+        "bpe_proxy_tokens": 11128
+      },
+      "tsln_style_delta": {
+        "chars": 12726,
+        "chars_div_4": 3181,
+        "bpe_proxy_tokens": 10620
+      },
+      "chronosieve_swing_pla_digest": {
+        "segments": 107,
+        "pla_compression_ratio": 20.794392523364486,
+        "max_linf_err_ppm": 0.9999999999984084,
+        "markdown_reconstruct_max_linf_ppm": 1.0004324324323761,
+        "linf_verified": true,
+        "chars": 5325,
+        "chars_div_4": 1331,
+        "bpe_proxy_tokens": 2988,
+        "reduction_vs_json_bpe_pct": 91.60697733209742,
+        "reduction_vs_json_chars4_pct": 88.32865661171519,
+        "reduction_vs_csv_bpe_pct": 73.14881380301941,
+        "reduction_vs_csv_chars4_pct": 79.19662394498282,
+        "reduction_vs_tsln_bpe_pct": 71.86440677966101,
+        "reduction_vs_tsln_chars4_pct": 58.15781200880225
+      }
+    }
+  },
+  "llm_eval_dry_run": {
+    "ground_truth": {
+      "shift_detected": true,
+      "spike_t": 180,
+      "rogue_agent": 2
+    },
+    "wake_count": 5,
+    "wake_ticks": [
+      41,
+      47,
+      158,
+      161,
+      180
+    ],
+    "shift_ticks": [
+      158
+    ],
+    "rogue_flags": [
+      false,
+      false,
+      true
+    ],
+    "prompt_chars": 3386,
+    "prompt_est_tokens": 846,
+    "prompt_bpe_proxy_tokens": 1827,
+    "raw_json_chars_div_4": 2933,
+    "raw_json_bpe_proxy_tokens": 8751,
+    "prompt_vs_raw_json_bpe_reduction_pct": 79.12238601302708,
+    "prompt_vs_raw_json_chars4_reduction_pct": 71.15581316058643,
+    "digest_captures_ground_truth": true
+  }
+}

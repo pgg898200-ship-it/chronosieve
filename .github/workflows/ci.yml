@@ -1,0 +1,77 @@
+name: ChronoSieve CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64 (NEON)
+            os: macos-15
+            python: "3.13"
+            avx2: "0"
+            make_avx2: ""
+            expected_simd: "NEON"
+          - name: Linux x86_64 (AVX2)
+            os: ubuntu-latest
+            python: "3.12"
+            avx2: "1"
+            make_avx2: "AVX2=1"
+            expected_simd: "AVX2"
+          - name: Linux x86_64 (Portable Scalar)
+            os: ubuntu-latest
+            python: "3.11"
+            avx2: "0"
+            force_scalar: "1"
+            make_avx2: ""
+            expected_simd: "SCALAR"
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dev/test tools
+        run: |
+          python3 -m pip install --upgrade pip setuptools pytest numpy ruff mypy
+
+      - name: Build native C11 CLI & verify <150 KB
+        run: |
+          make cli ${{ matrix.make_avx2 }}
+          ./chronosieve info
+          SIZE=$(wc -c < chronosieve)
+          echo "Native CLI size: ${SIZE} bytes"
+          test "${SIZE}" -lt 153600
+
+      - name: Run C11 ASan + UBSan suite (SIMD & Scalar)
+        run: |
+          make test-c ${{ matrix.make_avx2 }}
+
+      - name: Verify SIMD vs Scalar numerical parity (<1e-12)
+        run: |
+          make test-parity ${{ matrix.make_avx2 }}
+
+      - name: Build and install Python C-extension
+        env:
+          CHRONOSIEVE_AVX2: ${{ matrix.avx2 }}
+          CHRONOSIEVE_FORCE_SCALAR: ${{ matrix.force_scalar || '0' }}
+        run: |
+          python3 -m pip install --no-build-isolation --no-deps -e .
+          python3 -c "import chronosieve as cs; b = cs.simd_backend(); print('Backend:', b); assert b == '${{ matrix.expected_simd }}'"
+
+      - name: Run full pytest suite (Math proofs + MCP stdio + CLI)
+        run: |
+          pytest -v tests/
+
+      - name: Lint C11 + Python (ruff + mypy)
+        run: |
+          make lint

@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chronosieve"
+version = "0.1.0"
+description = "Zero-dependency C11/SIMD streaming inference, conformal uncertainty, multi-agent fusion & LLM digest engine"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = []
+keywords = [
+    "streaming",
+    "time-series",
+    "e-detector",
+    "conformal-prediction",
+    "online-learning",
+    "multi-agent",
+    "simd",
+    "mcp",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: C",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/pgg898200-ship-it/chronosieve"
+Repository = "https://github.com/pgg898200-ship-it/chronosieve"
+Issues = "https://github.com/pgg898200-ship-it/chronosieve/issues"
+
+[project.scripts]
+chronosieve-mcp = "chronosieve.mcp_server:main"
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+packages = ["chronosieve"]
+
+[tool.setuptools.package-data]
+chronosieve = ["py.typed", "*.pyi"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true

@@ -1,0 +1,22 @@
+# Compiled binaries & build artifacts
+/chronosieve
+/build_test_*
+/build_parity_*
+*.dSYM/
+build/
+dist/
+*.o
+*.so
+*.dylib
+*.dll
+*.egg-info/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
