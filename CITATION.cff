@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+type: software
+message: "If you use ChronoSieve in your work, please cite this release."
+title: ChronoSieve
+authors:
+  - name: "ChronoSieve Contributors"
+version: "0.2.1"
+date-released: 2026-11-22
+license: MIT
+repository-code: "https://github.com/pgg898200-ship-it/chronosieve"
+url: "https://github.com/pgg898200-ship-it/chronosieve/releases/tag/v0.2.1"
