@@ -96,6 +96,20 @@ def test_stdlib_buffer_zero_dependency_roundtrip() -> None:
     assert cres["step_count"] == n
 
 
+def test_native_cli_help_describes_stream_formats() -> None:
+    for name, expected in (
+        ("detect", "zero-based tick"),
+        ("conformal", "observed,predicted"),
+        ("digest", "time,value"),
+        ("bench", "generated stream"),
+    ):
+        for flag in ("-h", "--help"):
+            result = subprocess.run([str(CLI_BIN), name, flag], capture_output=True, text=True, check=True)
+            assert f"Usage: chronosieve {name}" in result.stdout
+            assert expected in result.stdout
+            assert not result.stderr
+
+
 def test_native_cli_binary_size_and_subcommands() -> None:
     assert CLI_BIN.exists(), f"CLI binary not built at {CLI_BIN}"
     size_bytes = os.path.getsize(CLI_BIN)

@@ -46,6 +46,7 @@ The columns are the burst setting, the ticks that produced digests, and the orig
 |---|---|---|
 | A telemetry collector feeding an alert rule or LLM | Python `ChronoSieve.step(t, y)` | Per-tick interval and wake decision, plus a Markdown digest on wake |
 | A residual stream with a known baseline | `EDetector.step(residual)` | Sequential change statistic and alarm flag for the selected detector family |
+| A stream in a file or shell pipeline | [Native CLI](#detect-a-change-with-the-native-cli) | The first alarm tick and detector statistic, in text or JSON |
 | Several intermittent forecasters | `ChronoSieve.step(t, y, preds=…, active=…)` | Combined prediction and updated interval |
 | An MCP client inspecting a channel | `chronosieve_ingest`, then `chronosieve_zoom` | Batch wake count and retained original samples over an inclusive time range |
 
@@ -204,11 +205,26 @@ if out["should_wake"]:
     raw = pipe.zoom(35.0, 42.0)     # Exact lossless ring-buffer drill-down
 ```
 
-### 2. Native 101 KB C11 CLI
+### Detect a change with the native CLI
 
-```bash
-./chronosieve info
-printf '0.1\n-0.2\n0.0\n3.5\n3.8\n4.1\n' | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 50 --json
+From a checkout with Make and a C11 compiler, feed eight readings into the Catoni detector.
+
+```sh
+make cli
+printf '%s\n' 0 0 0 0 0 0 3 3 | ./chronosieve detect --family catoni --mu0 0 --sigma 1 --threshold 20
+```
+
+```text
+ALARM tick=7 stat=21.2617 threshold=20.00
+```
+
+![Eight readings go from zero to three at tick 6. The detector statistic crosses the threshold of 20 at tick 7.](docs/first-alarm.svg)
+
+In this synthetic trace the alarm arrives on the second changed reading, at zero-based tick 7. The CLI then prints a summary. Add `--json` for a single machine-readable record. Run `./chronosieve detect --help` for the input format and options.
+
+Other native commands can summarize a series or time the kernels on this machine.
+
+```sh
 seq 1 200 | awk '{print $1 "," ($1==120 ? 50.0 : sin($1*0.05))}' | ./chronosieve digest --eps 0.05 --channel sensor_0
 ./chronosieve bench --n 2000000
 ```

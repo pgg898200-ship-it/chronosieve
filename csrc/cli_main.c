@@ -21,23 +21,6 @@ static double cs_now_ns(void) {
     return (double)ts.tv_sec * 1.0e9 + (double)ts.tv_nsec;
 }
 
-static void print_usage(void) {
-    printf(
-        "chronosieve %s (%s SIMD) - Zero-dep C11 online inference & agent digest engine\n"
-        "\n"
-        "Usage:\n"
-        "  chronosieve info\n"
-        "  chronosieve detect [--family auto|catoni|bounded|symmetry|rank]\n"
-        "                     [--accum esr|ecusum] [--side both|upper|lower]\n"
-        "                     [--mu0 V] [--sigma S] [--threshold G] [--auto-reset] [file]\n"
-        "  chronosieve conformal [--alpha A] [--eta E] [--threshold G] [--no-ereset] [file]\n"
-        "  chronosieve digest [--eps E] [--channel NAME] [--threshold G] [--alpha A]\n"
-        "                     [--zoom T0:T1] [file]\n"
-        "  chronosieve bench [--n N]\n",
-        cs_version_string(),
-        cs_simd_backend_name());
-}
-
 static int parse_two_doubles(const char *line, double *a, double *b, int *count) {
     const char *p = line;
     while (*p && (isspace((unsigned char)*p) || *p == ',')) {
@@ -523,8 +506,44 @@ static int cmd_bench(int argc, char **argv) {
     return 0;
 }
 
+typedef struct {
+    const char *name;
+    const char *options;
+    const char *description;
+    int (*run)(int argc, char **argv);
+} cli_command_t;
+
+static const cli_command_t commands[] = {
+    {"detect",
+     "[--family auto|catoni|bounded|symmetry|rank] [--accum esr|ecusum]\n"
+     "                     [--side both|upper|lower] [--mu0 V] [--sigma S]\n"
+     "                     [--threshold G] [--auto-reset] [--json] [file]",
+     "Read one value or time,value per line. Report alarms by zero-based tick.", cmd_detect},
+    {"conformal",
+     "[--alpha A] [--eta E] [--threshold G] [--no-ereset] [--json] [file]",
+     "Read observed,predicted pairs. A lone observation uses a prediction of zero.", cmd_conformal},
+    {"digest",
+     "[--eps E] [--channel NAME] [--threshold G] [--alpha A] [--zoom T0:T1] [file]",
+     "Summarize time,value pairs as Markdown. Use --zoom to print retained samples as CSV.", cmd_digest},
+    {"bench", "[--n N]", "Measure native kernels on a generated stream.", cmd_bench},
+};
+
+static void print_usage(void) {
+    printf("chronosieve %s (%s SIMD) - streaming inference and change detection\n\n",
+           cs_version_string(), cs_simd_backend_name());
+    puts("Usage:\n  chronosieve info");
+    for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i) {
+        printf("  chronosieve %s %s\n", commands[i].name, commands[i].options);
+    }
+    puts("\nRead stream input from stdin or a file. Use COMMAND --help for input and output formats.");
+}
+
+static bool is_help(const char *arg) {
+    return strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0;
+}
+
 int main(int argc, char **argv) {
-    if (argc < 2 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
+    if (argc < 2 || is_help(argv[1])) {
         print_usage();
         return 0;
     }
@@ -532,19 +551,17 @@ int main(int argc, char **argv) {
         printf("chronosieve %s (SIMD=%s)\n", cs_version_string(), cs_simd_backend_name());
         return 0;
     }
-    if (strcmp(argv[1], "detect") == 0) {
-        return cmd_detect(argc, argv);
+    for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i) {
+        const cli_command_t *command = &commands[i];
+        if (strcmp(argv[1], command->name) == 0) {
+            if (argc == 3 && is_help(argv[2])) {
+                printf("Usage: chronosieve %s %s\n\n%s\n",
+                       command->name, command->options, command->description);
+                return 0;
+            }
+            return command->run(argc, argv);
+        }
     }
-    if (strcmp(argv[1], "conformal") == 0) {
-        return cmd_conformal(argc, argv);
-    }
-    if (strcmp(argv[1], "digest") == 0) {
-        return cmd_digest(argc, argv);
-    }
-    if (strcmp(argv[1], "bench") == 0) {
-        return cmd_bench(argc, argv);
-    }
-
     fprintf(stderr, "chronosieve: unknown command '%s'\n", argv[1]);
     print_usage();
     return 1;
