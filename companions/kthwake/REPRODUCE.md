@@ -9,3 +9,13 @@ The most valuable rerun uses an independently selected event stream, unchanged r
 5. Post a public benchmark link or a reproducible issue in the [KthWake Space community](https://huggingface.co/spaces/pgg-engineering/kthwake/discussions). An integration is easiest to verify when it links to executable source and records which work KthWake replaced.
 
 First-party runs and the provided public input traces are development evidence. The project's organic adoption count starts with a link to the first independent integration.
+
+## Publish the browser timeline
+
+Open `demo/index.html` locally and select **Next callback**. The clock advances from 5 ms to 20 ms and the three-result rule clears. The release downloads point to the versioned files covered by the SHA-256 manifest.
+
+From `companions/kthwake` in a release checkout, publish the timeline and its Space card together with an authenticated Hugging Face CLI.
+
+```sh
+hf upload pgg-engineering/kthwake demo . --repo-type space
+```
