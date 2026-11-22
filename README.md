@@ -1,47 +1,24 @@
 # ChronoSieve
 
-**118 KB zero-dependency C11/SIMD engine for mathematically certified streaming change detection, conformal uncertainty, multi-agent fusion, and LLM wake-up digests.**
+**Decide when a telemetry stream should wake a monitoring agent.**
 
-[![CI](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml/badge.svg)](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml)
-[![Release](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/release.yml/badge.svg)](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/release.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](#install)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](#install)
+A latency monitor samples a service on every tick. ChronoSieve takes each timestamp and reading, compares the reading with a forecast, and returns a prediction interval and a `should_wake` flag. When the flag is true, your application can send the accompanying Markdown summary to an on-call engineer or a model. It can also retrieve the original readings from the channel’s recent history.
 
-```
-Raw telemetry / K async agents ──► [C11/NEON|AVX2 System-1: 1.9–4.0 ns/tick] ──► 0 LLM tokens while stationary
-                                            │
-                                            ├── Certified shift (ARL >= gamma, heavy-tail valid)
-                                            ├── Peer-relative rogue agent isolated (immune to 86σ spikes)
-                                            └── Conformal anomaly (verbatim, 0.0 error)
-                                            ▼
-                                  Compact Markdown Digest (-94.8% real o200k_base) + lossless zoom(ch, t0, t1)
-```
+![A radial print of 63 latency readings. One long mark at sample 50, a 31 ms spike among 12 ms readings, produces a digest when one anomaly is enough to wake the caller.](docs/chronosieve-signal.svg)
 
-Most streaming stacks force you to stitch together five slow, fragile pieces: a Gaussian drift detector whose false-alarm rate collapses on heavy tails, a conformal tracker that takes 150 ticks to recover after a volatility shock, a naive ensemble that breaks when slow LLM agents sleep asynchronously or a common exogenous spike hits, and raw JSON/CSV telemetry that burns 120,000+ LLM tokens per window.
-
-**ChronoSieve v0.2.1 fuses four 2023–2026 statistical primitives into one zero-dependency C11/SIMD core** with a zero-copy `Py_buffer` Python extension, a **118 KB standalone CLI**, and a **zero-dependency stdio MCP server**:
-
-1. **Zero-`exp` SIMD E-Detectors & Cross-Agent E-Fusion** (`EDetector`, `EFusion`): Register-resident 16-lane NEON & x86_64 AVX2 E-SR and log-domain E-CUSUM across 4 distribution-free families — **Bounded Betting** (**491.6M ticks/s**), **Algebraic Catoni** (Wang & Ramdas 2023; **251.4M ticks/s** stdlib `array.array` / **246.5M ticks/s** NumPy, zero `exp()`), **Algebraic Symmetry** (**220.0M ticks/s**, valid even for infinite-variance Cauchy), and **Vovk Growing-Prefix Conformal Rank Betting** (cache-line-aligned SIMD arena B-tree at **15.8M ticks/s**, **2,530x faster** than `river.KSWIN`). Cross-agent E-Fusion guarantees $\text{ARL} \ge \gamma$ under arbitrary unknown cross-agent correlation ($K=8, \rho=0.85$), and detects the historic **1898 Nile Aswan dam changepoint** in **1905** (+7 yrs, 0 pre-1899 false alarms, zero priors).
-2. **Pre-Control E-Reset Conformal PID + SoA SIMD + Zero-Copy `coma_merge_batch`** (`ConformalPID`, `ConformalBatchPID`, `coma_merge`, `coma_merge_batch`): Exact Angelopoulos et al. (NeurIPS 2023) Conformal PID with saturating tangent integrator. Runs its Vovk Rank E-detector strictly on the **exogenous pre-control score** $s_t = |y_t - \hat{y}_t|$ (never closed-loop miscoverage $I_t$), resets **only** the bounded D-term scorecaster $\hat{q}_{t+1}^D \in [0, B]$ with mandatory $W_{\text{cal}} \ge 32$ warmup (**+20 pp** over Rolling-D PID and **+46 pp** over pure P+I PID after 5x volatility shocks; **90.6%** out-of-sample coverage over 277 years of real **Sunspot** cycles), plus a **673.9M ch-ticks/s** (`1.48 ns/ch-tk`) 64-channel SoA SIMD kernel and zero-`malloc` $O(K \log K)$ **Online COMA** batch consensus (**7.44M steps/s** CLI / **7.25M steps/s** Python, Gasparin & Ramdas UAI 2024).
-3. **SIMD Sleeping Fixed-Share BOA + Peer-Relative Rogue Attribution** (`SleepingBOA`): Asynchronous active bitmask $a_{t,k} \in \{0,1\}$ (zero-regret sleeping-expert imputation for mixing fast System-1 models with slow System-2 LLMs), branchless sorting-network peer-relative excess residual attribution ($\text{excess}_k = \max(0, |y - p_k| - \text{median}_j |y - p_j|)$ with 50%-breakdown peer-median calibration floor and graceful raw-residual fallback for `< 3` active agents), SIMD Estrin/Cephes `exp()` (`< 5e-16` relative error), and shift-coupled Fixed-Share mixing at **8.79M steps/s** (`113.8 ns/step` Python / `115.3 ns/step` CLI for $K=8$). Immune to 86-sigma common exogenous spikes even at default `rogue_threshold=200.0` (**505/505 seeds** exact rogue isolation).
-4. **Anomaly-Preserving Swing PLA + Wake-Up Gate + Lossless `zoom()`** (`StreamDigest`): Exact ULP-guarded $L_\infty \le \epsilon$ piecewise linear trajectory compression at **470.7M ticks/s** Native CLI (**404.4M ticks/s** Python `Py_buffer`), verbatim `0.0`-error pinning of conformal anomalies, **86.2% real OpenAI `o200k_base`** full-series token reduction on real-world **Mauna Loa CO2** without wake gating (**94.8% real `o200k_base`** with wake gating on 10k telemetry), and an $O(\log N)$ fixed-memory circular ring buffer for lossless `zoom(channel, t0, t1)` drill-down via Python, CLI, or MCP.
-
----
+[Run the latency example in Colab](https://colab.research.google.com/github/pgg898200-ship-it/chronosieve/blob/main/examples/replay_a_latency_spike.ipynb) · [Choose Python, CLI or MCP](#choose-an-interface) · [Agent reference](llms.txt)
 
 ## Replay one latency spike
 
 ![One 31 ms spike in a 12 ms trace. One gate emits a digest and the other stays quiet. Both retain the reading.](docs/latency-spike.svg)
 
-[Run the replay in Colab](https://colab.research.google.com/github/pgg898200-ship-it/chronosieve/blob/main/examples/replay_a_latency_spike.ipynb) · [Read the notebook](examples/replay_a_latency_spike.ipynb) · [Inspect the measured workloads](benchmarks/results_m4.json)
-
-Install with zero Python runtime dependencies (`CC=cc` selects the system C11 compiler on Linux/macOS):
+Build the Python extension with Git, CPython 3.10 or later, Python development headers and a C11 compiler. This command uses the system compiler on Linux or macOS and installs the revision used for the replay.
 
 ```bash
-CC=cc python3 -m pip install "git+https://github.com/pgg898200-ship-it/chronosieve.git"
+CC=cc python3 -m pip install "git+https://github.com/pgg898200-ship-it/chronosieve.git@93134025051ec83fa84ba16e16c7fb466e7d376c"
 ```
 
-This synthetic trace holds latency at 12 ms, injects one 31 ms observation, then returns to baseline. Run it with two anomaly-burst settings:
+This synthetic trace holds latency at 12 ms, injects one 31 ms observation, then returns to baseline. Run it with two anomaly-burst settings.
 
 ```python
 from chronosieve import ChronoSieve
@@ -65,6 +42,8 @@ for burst in (1, 2):
 
 The columns are the burst setting, the ticks that produced digests, and the original values at ticks 49 through 51. With `anomaly_burst=1` the isolated spike wakes the caller. With `anomaly_burst=2` this replay stays quiet. Both runs retain the exact readings until they age out of the ring buffer. A detected shift or a newly flagged forecaster can wake the caller independently of the burst setting.
 
+[Notebook with saved output](examples/replay_a_latency_spike.ipynb)
+
 ## Choose an interface
 
 | Your application | Entry point | Result |
@@ -76,6 +55,15 @@ The columns are the burst setting, the ticks that produced digests, and the orig
 | An MCP client inspecting a channel | `chronosieve_ingest`, then `chronosieve_zoom` | Batch wake count and retained original samples over an inclusive time range |
 
 After a detector alarm, [KthWake](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/kthwake-0.1.0/companions/kthwake) can escalate recurring alarms and [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can route an alarm to a worker with capacity. Both have runnable examples below.
+
+### What each component tracks
+
+| Component | Input and result |
+|---|---|
+| `EDetector` and `EFusion` | Track evidence for a change in one stream or combine evidence across streams. Choose the detector family to match your assumptions about the baseline. |
+| `ConformalPID` and `coma_merge` | Update a prediction interval as actual values arrive, or combine intervals from several forecasters. |
+| `SleepingBOA` | Combine forecasts from the currently active agents and adjust their weights as outcomes arrive. |
+| `StreamDigest` | Summarize the channel, keep flagged anomalies and return exact samples while they remain in the ring buffer. |
 
 ## Verified Apple M4 Benchmarks (v0.2.0)
 
@@ -274,6 +262,8 @@ if out["should_wake"]:
 # 3) Zero-copy batch COMA interval consensus over (T, K) buffers (7.3M steps/s for K=8)
 # summary = cs.coma_merge_batch(lowers_2d, uppers_2d, out_hull_lo=hlo, out_hull_hi=hhi)
 ```
+
+<a id="detect-a-change-with-the-native-cli"></a>
 
 ### Detect a change with the native CLI (118 KB)
 

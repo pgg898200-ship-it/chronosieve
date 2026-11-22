@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="960" height="426" viewBox="0 0 960 426" role="img" aria-labelledby="title description">
+  <title id="title">ChronoSieve — the single-anomaly gate</title>
+  <desc id="description">An instrument print made from 63 latency readings in sample order. Sixty-two short green-black marks represent 12 ms. The long vermilion mark represents 31 ms at sample 50. With the anomaly burst set to one, only that reading emits a digest.</desc>
+  <defs>
+    <path id="reading-12" d="M54.09 -14.49 Q98.79 -21.00 146.00 0.00 L145.91 5.22 Q100.45 -10.56 55.06 -10.21 Z"/>
+    <path id="reading-31" d="M54.09 -14.49 Q168.49 -35.81 288.50 0.00 L288.32 10.32 Q171.31 -18.01 55.06 -10.21 Z"/>
+    <path id="ticket" d="M611 92H905V289H611L619 282.85L611 276.70L619 270.55L611 264.40L619 258.25L611 252.10L619 245.95L611 239.80L619 233.65L611 227.50L619 221.35L611 215.20L619 209.05L611 202.90L619 196.75L611 190.60L619 184.45L611 178.30L619 172.15L611 166.00L619 159.85L611 153.70L619 147.55L611 141.40L619 135.25L611 129.10L619 122.95L611 116.80L619 110.65L611 104.50L619 98.35L611 92.20Z"/>
+  </defs>
+  <rect width="960" height="426" fill="#efe9d5"/>
+  <g fill="#192b24" font-family="Georgia, 'DejaVu Serif', serif">
+    <text x="34" y="50" font-size="36" letter-spacing="-1.6">ChronoSieve</text>
+  </g>
+  <g transform="translate(287 213)">
+    <use xlink:href="#reading-12" transform="rotate(-299.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-294.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-288.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-282.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-276.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-271.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-265.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-259.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-254.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-248.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-242.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-236.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-231.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-225.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-219.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-214.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-208.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-202.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-196.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-191.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-185.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-179.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-174.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-168.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-162.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-156.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-151.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-145.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-139.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-134.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-128.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-122.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-116.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-111.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-105.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-99.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-94.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-88.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-82.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-76.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-71.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-65.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-59.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-54.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-48.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-42.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-36.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-31.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-25.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-19.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-31" transform="rotate(-14.0000)" fill="#c3482f"/>
+    <use xlink:href="#reading-12" transform="rotate(-8.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(-2.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(3.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(8.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(14.5714)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(20.2857)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(26.0000)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(31.7143)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(37.4286)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(43.1429)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(48.8571)" fill="#192b24"/>
+    <use xlink:href="#reading-12" transform="rotate(54.5714)" fill="#192b24"/>
+    <circle r="47.5" fill="none" stroke="#192b24" stroke-width="1" stroke-dasharray="0.8 4.1"/>
+    <text y="10" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', serif" font-size="46" fill="#192b24">12</text>
+    <text y="30" text-anchor="middle" font-family="'DejaVu Sans Mono', monospace" font-size="19" fill="#192b24">ms</text>
+  </g>
+  <g transform="rotate(-4 750 196)">
+    <use xlink:href="#ticket" transform="translate(3 5)" fill="#192b24"/>
+    <use xlink:href="#ticket" fill="#c3482f"/>
+    <path d="M849 92V289" stroke="#f7eacb" stroke-width="2" stroke-dasharray="2 6"/>
+    <g fill="#fff4d9">
+      <text x="637" y="134" font-family="Georgia, 'DejaVu Serif', serif" font-size="39" font-style="italic">Digest</text>
+      <text x="635" y="231" font-family="Georgia, 'DejaVu Serif', serif" font-size="103" letter-spacing="-9">31</text>
+      <text x="758" y="219" font-family="'DejaVu Sans Mono', monospace" font-size="29">ms</text>
+      <text x="637" y="270" font-family="'DejaVu Sans Mono', monospace" font-size="23">Sample 50</text>
+    </g>
+    <g fill="#192b24"><circle cx="877" cy="119" r="6"/><circle cx="877" cy="262" r="6"/></g>
+    <g stroke="#192b24" stroke-width="4"><path d="M865 162h23 M865 175h23 M865 188h10 M865 201h10 M865 214h23 M865 227h10"/></g>
+  </g>
+  <path d="M35 369H925" fill="none" stroke="#192b24" stroke-width="1.3"/>
+  <g fill="#192b24" font-family="Arial, 'DejaVu Sans', sans-serif" font-size="26">
+    <text x="35" y="405">63 latency readings</text>
+    <text x="925" y="405" text-anchor="end">One-anomaly gate</text>
+  </g>
+  <path d="M564 394l0.9 -0.5 M599 226l1.1 -0.5 M570 196l0.6 -0.5 M843 39l1.1 -0.5 M557 394l1.1 0.8 M523 177l0.6 0.8 M857 35l0.6 -0.5 M542 244l0.6 0.3 M587 158l1.1 -0.5 M87 343l1.1 -0.5 M64 65l0.9 0.8 M886 100l0.9 0.3 M745 15l0.6 0.3 M350 289l1.1 0.3 M185 26l1.1 -0.5 M769 197l0.9 0.3 M901 77l0.6 0.8 M702 330l0.9 -0.5 M768 220l0.6 0.8 M262 298l1.1 0.3 M473 359l1.1 0.3 M333 123l0.6 0.3 M155 411l0.6 -0.5 M586 403l0.6 -0.5 M653 122l0.6 0.3 M637 340l1.1 0.8 M838 112l0.9 0.3 M457 384l0.9 0.3 M874 141l1.1 -0.5 M511 147l0.9 0.3 M331 249l0.6 0.3 M632 22l0.9 0.8 M451 101l0.9 -0.5 M580 351l0.9 0.3 M649 65l0.6 0.8 M373 130l0.6 0.8 M59 24l0.9 0.8 M282 63l0.9 0.3 M380 271l1.1 0.8 M343 21l0.9 0.8 M40 170l0.9 -0.5 M538 286l0.9 0.3 M169 152l0.6 0.8 M153 166l1.1 0.8 M671 315l0.9 0.8 M452 275l0.6 0.3 M489 349l1.1 0.8 M336 237l0.6 0.8 M461 362l1.1 -0.5 M860 406l1.1 0.3 M104 197l0.9 0.8 M371 267l0.6 -0.5 M398 163l0.6 0.8 M736 102l1.1 0.3 M803 88l0.6 0.8 M610 223l0.6 -0.5 M431 231l1.1 0.8 M739 198l1.1 0.3 M648 73l0.9 -0.5 M99 158l0.9 -0.5 M676 94l1.1 0.3 M123 396l1.1 0.3 M176 57l0.6 -0.5 M52 326l0.9 0.8 M579 215l0.6 -0.5 M747 91l1.1 -0.5 M666 288l0.9 0.8 M900 82l1.1 0.8 M238 337l0.9 0.8 M694 224l0.6 0.3 M268 287l0.9 -0.5 M527 154l0.9 0.8 M371 156l0.9 0.3 M829 344l0.6 -0.5 M233 130l1.1 -0.5 M729 415l1.1 0.3 M168 78l1.1 0.8 M640 341l0.9 -0.5 M592 396l0.6 0.8 M605 311l0.6 -0.5 M456 401l0.9 -0.5 M167 181l1.1 0.8 M157 74l1.1 -0.5 M106 280l0.6 0.3 M438 124l0.9 -0.5 M29 149l1.1 0.8 M635 384l0.6 0.3 M172 43l1.1 0.3 M269 190l0.6 -0.5 M184 128l0.6 -0.5 M585 302l0.9 0.3 M790 305l0.6 0.3 M436 405l0.6 0.3 M49 346l0.6 0.3 M721 391l1.1 0.8 M279 225l0.6 0.8 M925 22l0.6 -0.5 M800 196l1.1 0.3 M498 149l0.9 0.3 M907 271l1.1 0.3 M419 226l0.9 0.8 M612 359l1.1 -0.5 M727 43l0.6 0.8 M41 168l0.6 -0.5 M776 146l1.1 -0.5 M398 162l0.6 -0.5 M669 277l1.1 -0.5 M215 414l0.9 0.3 M40 317l0.9 -0.5 M482 296l0.9 0.3 M274 240l0.6 0.3 M188 42l0.6 0.8 M768 365l1.1 0.3 M599 336l0.9 -0.5 M754 134l1.1 0.8 M227 268l1.1 0.3 M692 132l0.6 0.3 M526 389l1.1 0.8 M524 153l1.1 0.8 M609 25l0.6 0.8 M614 327l1.1 -0.5 M48 256l1.1 0.3 M405 336l0.6 -0.5 M879 261l1.1 0.3 M231 380l0.6 0.3 M501 243l0.6 -0.5 M333 303l0.9 -0.5 M170 181l1.1 -0.5 M403 350l0.6 0.3 M911 217l1.1 -0.5 M341 398l0.9 -0.5 M811 331l0.6 0.3 M813 114l1.1 0.3 M742 118l1.1 0.8 M314 82l1.1 0.3 M435 413l0.9 0.3 M125 365l0.9 0.3 M275 188l0.6 0.8 M566 278l0.6 0.8 M124 379l0.9 0.3 M508 208l0.9 -0.5 M860 95l1.1 0.8 M167 160l1.1 0.8 M280 27l0.9 0.3 M254 307l1.1 -0.5 M503 261l1.1 -0.5 M690 129l0.6 0.8 M511 350l0.6 0.3 M681 51l0.9 -0.5 M876 112l0.6 0.8 M130 269l0.6 0.3 M667 272l0.9 0.8 M283 401l1.1 -0.5 M133 396l1.1 0.3 M289 230l1.1 0.8 M58 153l0.9 -0.5 M77 384l0.6 0.8 M878 204l1.1 0.3 M716 188l0.9 0.8 M554 108l0.9 0.3 M336 103l0.6 -0.5 M325 365l0.9 0.8 M160 271l0.6 0.8 M446 126l0.9 0.3 M604 119l1.1 0.8 M150 137l0.6 0.8 M539 126l0.6 0.8 M265 387l1.1 0.8 M655 385l0.6 0.3 M512 62l0.6 0.8 M685 397l0.9 0.3 M540 88l0.6 -0.5 M570 305l1.1 -0.5 M601 405l1.1 0.8 M849 271l1.1 -0.5 M930 326l1.1 0.3 M352 313l1.1 -0.5 M707 187l0.9 0.8 M896 182l0.6 -0.5 M653 47l0.6 -0.5 M174 361l0.6 -0.5 M338 77l1.1 -0.5 M708 242l1.1 -0.5 M644 33l0.9 0.8 M735 305l0.6 0.8 M432 40l1.1 -0.5 M334 383l0.9 -0.5 M812 151l0.9 -0.5 M484 241l0.9 0.3 M30 173l0.6 0.3 M272 189l0.6 0.8 M737 113l1.1 -0.5 M683 222l0.9 0.8 M409 412l0.6 -0.5 M86 143l0.9 -0.5 M596 190l0.9 -0.5 M480 360l1.1 0.3 M814 170l0.6 -0.5 M796 415l0.9 0.8 M725 293l0.9 0.3 M287 99l1.1 0.3 M796 355l0.9 0.8 M737 333l0.9 0.3 M867 158l0.9 0.8 M256 292l0.9 0.3 M37 344l0.6 0.3 M542 210l1.1 0.3 M310 295l0.6 -0.5 M883 60l0.9 0.3 M644 142l1.1 0.3 M240 77l0.9 0.3 M86 339l1.1 0.3 M836 103l0.9 -0.5 M887 298l0.6 -0.5 M507 324l0.9 -0.5 M745 172l1.1 -0.5 M798 330l0.9 0.8 M570 39l1.1 0.8 M576 16l1.1 -0.5 M523 384l0.6 0.3 M633 225l0.6 0.8 M772 268l1.1 0.3 M487 125l1.1 -0.5 M222 271l1.1 -0.5 M451 336l0.9 0.3 M303 257l1.1 0.3 M170 409l0.6 -0.5 M220 316l0.6 0.3 M282 27l1.1 -0.5 M926 125l0.6 -0.5 M673 322l0.9 0.8 M720 310l0.9 -0.5 M137 303l0.9 -0.5 M577 89l0.9 0.8 M723 412l0.6 -0.5 M583 96l0.9 0.8 M125 112l0.6 -0.5 M137 392l0.6 -0.5 M64 313l0.6 0.3 M141 18l0.9 0.3 M499 372l0.6 -0.5 M785 244l0.9 -0.5 M542 244l0.9 0.8 M91 161l1.1 -0.5 M119 241l0.6 0.8 M218 246l1.1 0.8 M391 242l1.1 0.3 M888 279l0.6 0.8 M422 160l1.1 0.3 M808 77l0.9 0.8 M262 269l1.1 0.3 M574 257l0.9 -0.5 M900 163l1.1 -0.5 M28 72l1.1 0.3 M605 244l1.1 -0.5 M761 402l0.6 0.8 M83 324l0.9 -0.5 M264 289l0.9 0.8 M396 276l0.6 -0.5 M49 154l1.1 0.8 M232 78l0.9 -0.5 M349 30l0.9 0.3 M111 212l1.1 -0.5 M140 187l1.1 -0.5 M628 229l0.6 0.3 M551 44l0.9 -0.5 M188 336l0.6 -0.5 M159 224l1.1 -0.5 M85 229l0.6 -0.5 M451 86l1.1 0.3 M582 235l0.9 0.8 M915 37l0.9 0.8 M217 367l1.1 0.3 M816 246l1.1 0.8 M808 338l1.1 -0.5 M760 194l0.9 0.3 M284 82l0.6 -0.5 M136 187l1.1 -0.5 M583 214l0.9 0.8 M718 279l0.6 -0.5 M845 201l1.1 0.3 M65 82l0.6 0.3 M54 201l0.9 0.3 M658 20l0.6 0.8 M882 402l0.9 -0.5 M189 88l0.6 0.8 M393 124l1.1 0.3 M499 101l1.1 0.3 M499 396l1.1 -0.5 M465 372l1.1 -0.5 M453 391l0.9 0.8 M509 359l0.6 0.8 M231 70l1.1 0.3 M197 355l0.6 0.8 M777 349l1.1 0.3 M666 398l0.6 0.3 M52 408l0.6 -0.5 M583 239l1.1 0.3 M253 218l1.1 -0.5 M34 329l0.6 -0.5 M170 45l1.1 0.8 M853 361l0.6 0.8 M202 246l0.9 0.3 M566 240l0.6 0.3 M914 138l1.1 0.3 M313 48l0.9 0.3 M323 309l0.9 -0.5 M174 41l1.1 0.8 M568 123l0.9 0.8 M580 279l0.6 0.8 M913 366l1.1 -0.5 M399 276l0.9 0.8 M801 403l0.9 -0.5 M141 119l0.6 0.3 M97 172l1.1 -0.5 M134 107l0.9 0.3 M805 114l1.1 0.8 M846 176l0.9 0.8 M232 124l0.6 -0.5 M669 227l1.1 -0.5 M57 237l0.6 -0.5 M69 342l1.1 0.3 M315 50l0.6 0.3 M252 297l0.9 -0.5 M538 211l0.6 0.3 M49 170l0.6 -0.5 M435 382l0.6 -0.5 M480 74l0.6 0.3 M105 338l0.9 0.8 M106 378l0.9 -0.5 M888 248l1.1 -0.5 M196 119l0.9 -0.5 M560 73l0.6 0.3 M109 304l1.1 -0.5 M597 407l0.9 0.8 M58 324l0.9 0.3 M726 290l0.9 0.8 M498 326l1.1 0.8 M110 227l0.9 0.3 M931 306l0.6 0.3 M71 104l0.6 -0.5 M169 34l1.1 -0.5 M457 289l0.6 0.8 M211 275l0.6 0.8 M731 206l0.6 0.3 M814 346l0.6 0.8 M551 141l0.6 0.8 M510 168l0.6 0.3 M680 94l0.9 0.3 M320 109l0.6 0.3 M169 169l0.6 0.8 M811 17l1.1 0.3 M426 127l0.6 -0.5 M400 309l1.1 -0.5 M667 244l0.6 0.3 M694 352l0.6 0.3 M283 202l0.9 0.8 M755 34l1.1 0.8 M482 196l1.1 0.8 M623 379l0.9 0.3 M435 192l0.9 0.3 M221 366l1.1 -0.5 M99 185l1.1 0.8 M226 83l0.9 -0.5 M907 139l1.1 0.3 M324 387l0.9 0.3 M924 143l1.1 0.8 M448 93l0.6 0.8 M587 73l1.1 -0.5 M197 158l1.1 0.3 M223 70l0.9 -0.5 M188 231l0.9 -0.5 M82 94l0.6 -0.5 M759 24l1.1 0.8 M655 322l0.9 0.3 M867 335l1.1 0.8 M907 382l0.6 -0.5 M137 398l0.9 0.3 M681 258l0.9 -0.5 M453 401l0.9 0.8 M899 249l1.1 0.3 M476 43l0.9 -0.5 M688 99l0.6 0.8 M726 297l0.9 -0.5 M597 204l0.9 0.8 M321 348l1.1 -0.5 M600 357l1.1 0.8 M487 86l0.9 0.3 M924 156l1.1 0.3 M877 82l1.1 -0.5 M283 278l0.9 -0.5 M70 53l0.9 -0.5 M667 384l0.9 -0.5 M589 388l1.1 0.3 M752 225l0.9 0.3 M621 334l0.9 0.8 M651 354l0.6 0.3 M520 322l1.1 0.3 M423 255l1.1 0.3 M327 161l0.6 0.8 M805 95l1.1 0.8 M121 35l1.1 0.3 M400 107l0.6 -0.5 M732 292l0.6 0.3 M656 85l0.6 -0.5 M233 190l0.9 0.8 M123 83l0.9 -0.5 M445 40l0.6 -0.5 M596 43l1.1 -0.5 M625 283l0.9 -0.5 M345 324l0.6 0.3 M356 157l1.1 0.8 M750 134l0.6 0.8 M326 312l0.9 -0.5 M93 399l0.6 0.8 M537 88l1.1 0.8 M386 363l1.1 0.8 M184 266l0.9 -0.5 M562 133l0.9 0.3 M90 39l0.9 -0.5 M232 271l0.6 0.8 M261 362l1.1 0.8 M73 109l1.1 -0.5 M677 95l1.1 0.3 M528 237l1.1 -0.5 M858 308l0.9 -0.5 M448 397l1.1 0.8 M60 74l0.6 0.3 M672 342l0.6 0.3 M643 79l0.9 0.8 M823 394l0.9 0.8 M518 356l0.6 -0.5 M673 235l1.1 0.3 M324 313l1.1 -0.5 M121 268l0.9 0.3 M904 397l0.6 0.3 M358 32l0.9 -0.5 M627 400l1.1 0.8 M775 229l0.9 0.8 M838 211l0.6 -0.5 M837 92l1.1 0.3 M681 69l1.1 -0.5 M385 152l1.1 0.8 M900 301l0.6 0.8 M862 27l0.9 0.8 M474 81l0.6 0.3 M134 381l1.1 -0.5 M61 246l1.1 -0.5 M184 337l1.1 0.8 M385 289l0.9 0.8 M92 377l1.1 0.8 M214 408l0.9 0.8 M769 192l1.1 0.8 M581 331l1.1 -0.5 M516 197l0.6 0.3 M650 57l1.1 0.8 M761 198l0.9 0.3 M89 234l0.9 0.8 M747 170l1.1 0.8 M810 73l1.1 0.3 M402 201l0.9 -0.5 M125 192l1.1 -0.5 M180 89l0.6 0.8 M39 237l0.6 0.8 M310 262l1.1 -0.5 M345 273l0.9 0.3 M351 272l0.6 0.8 M229 48l1.1 -0.5 M325 125l0.9 0.8 M869 32l0.9 0.8 M593 231l0.6 0.8 M311 130l1.1 0.8 M903 404l0.9 0.3 M45 171l0.6 0.8 M886 96l0.6 0.8 M553 403l0.6 0.8 M299 396l0.9 -0.5 M660 303l1.1 0.3 M683 233l0.6 0.3 M396 66l0.9 -0.5 M534 290l0.6 -0.5 M525 350l0.6 0.8 M226 355l0.6 0.8 M562 415l0.9 0.3 M666 212l0.6 0.8 M282 184l0.6 -0.5 M384 268l0.6 0.8 M931 127l0.9 -0.5 M717 362l0.6 -0.5 M726 81l0.9 0.8 M298 390l1.1 0.3 M367 380l0.6 0.3 M99 304l0.6 0.8 M897 267l0.9 0.8 M435 202l1.1 0.3 M784 168l0.6 0.3 M526 241l0.9 0.3 M816 270l1.1 0.8 M666 400l0.9 0.8 M768 36l0.6 0.8 M90 321l0.9 0.3 M116 69l0.6 -0.5 M101 392l0.9 -0.5 M765 398l1.1 0.3 M835 182l0.9 0.8 M752 138l0.6 0.3 M727 20l1.1 0.8 M859 159l1.1 0.8 M666 413l1.1 -0.5 M492 259l1.1 0.3 M540 94l0.6 -0.5 M485 47l0.9 0.8 M922 126l1.1 0.3 M551 358l0.9 0.8 M193 364l0.6 0.8 M532 256l0.9 0.3 M33 92l1.1 -0.5 M635 307l0.6 -0.5 M392 252l1.1 0.3 M599 278l0.9 -0.5 M280 51l0.9 0.3 M60 212l0.6 0.3 M58 377l0.9 -0.5 M339 142l1.1 -0.5 M388 264l0.9 0.3 M586 194l0.6 -0.5 M320 320l0.9 -0.5 M168 290l1.1 0.3 M516 90l1.1 0.3 M669 289l0.9 0.8 M293 235l0.6 0.3 M202 412l0.6 -0.5 M302 61l1.1 -0.5 M272 393l0.6 0.8 M675 337l0.9 -0.5 M169 148l0.9 -0.5 M807 30l1.1 0.8 M49 196l0.9 0.3 M776 193l0.9 -0.5 M710 336l0.9 0.3 M27 61l0.9 0.8 M300 249l0.6 -0.5 M482 70l0.9 -0.5 M324 291l0.9 0.3 M842 171l0.6 -0.5 M713 321l0.6 -0.5 M374 249l0.9 0.8 M742 300l1.1 0.3 M894 274l0.6 0.8 M705 368l1.1 0.3 M746 69l0.6 0.3 M486 287l0.9 0.8 M285 381l0.9 0.3 M419 256l0.9 -0.5 M797 260l0.6 -0.5 M716 204l0.9 0.3 M250 219l0.6 -0.5 M113 338l0.6 0.3 M126 121l0.9 -0.5 M311 117l1.1 -0.5 M284 407l1.1 -0.5 M232 209l0.6 -0.5 M529 334l0.9 0.8 M714 306l0.9 -0.5 M598 390l1.1 0.3 M137 304l0.9 0.3 M121 313l0.6 0.3 M155 124l1.1 -0.5 M806 62l0.6 0.8 M873 271l0.6 -0.5 M871 415l0.9 -0.5 M156 177l0.6 0.8 M265 107l1.1 0.3 M574 267l0.6 -0.5 M226 148l0.6 0.3 M134 329l0.9 -0.5 M883 123l1.1 -0.5 M850 158l1.1 0.3 M338 162l0.9 0.3 M819 378l1.1 0.8 M61 130l1.1 0.3 M129 65l1.1 0.8 M321 35l1.1 0.8 M246 61l0.9 -0.5 M104 343l0.9 0.8 M521 111l1.1 0.8 M339 191l0.6 0.3 M708 215l1.1 0.3 M811 171l0.9 -0.5 M858 58l1.1 0.8 M692 393l0.6 -0.5 M647 128l0.9 -0.5 M904 254l0.6 0.3 M60 168l0.9 0.8 M243 327l1.1 -0.5 M375 268l0.6 0.8 M257 312l0.9 0.3 M95 51l1.1 -0.5 M33 286l0.9 0.8 M577 375l1.1 0.3 M198 21l0.9 0.3 M123 320l0.9 0.8 M150 210l0.9 -0.5 M406 84l1.1 0.8 M184 80l1.1 0.8 M216 121l1.1 0.3 M176 207l0.9 0.3 M611 415l1.1 0.8 M494 392l0.9 0.3 M907 370l0.9 0.3 M225 236l1.1 -0.5 M891 169l0.6 -0.5 M323 101l1.1 0.3 M149 280l0.6 -0.5 M798 354l1.1 0.8 M272 321l0.9 -0.5 M892 191l1.1 0.8 M602 228l0.9 0.8 M169 217l1.1 0.8 M365 357l0.9 -0.5 M809 370l0.9 0.8 M554 220l0.9 0.8 M729 236l0.9 -0.5 M689 201l0.6 -0.5 M44 193l0.9 0.8 M83 23l1.1 0.8 M635 284l1.1 0.8 M249 146l0.9 -0.5 M169 24l0.9 0.3 M640 193l1.1 -0.5 M425 361l0.9 0.8 M871 323l0.6 -0.5 M207 286l0.9 0.8 M355 123l0.9 0.3 M128 264l0.6 0.3 M38 188l0.9 0.3 M336 387l1.1 -0.5 M121 383l0.6 0.3 M415 371l0.6 0.3 M811 52l1.1 -0.5 M628 142l0.9 -0.5 M787 186l0.6 0.3 M384 233l0.6 0.8 M742 64l0.9 -0.5 M770 126l0.6 -0.5 M401 200l1.1 0.8 M749 264l0.6 -0.5 M90 296l0.6 -0.5 M681 85l0.9 0.3 M748 205l1.1 0.8" stroke="#efe9d5" stroke-width="1" stroke-linecap="round" opacity=".36"/>
+</svg>
