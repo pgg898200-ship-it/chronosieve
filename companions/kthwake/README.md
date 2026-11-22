@@ -4,7 +4,7 @@ Wake a waiting task when three tool results arrive within 20 ms. If results stop
 
 Place one index between each ordered stream of arrivals and your dispatcher. Pass in a timestamp and a count. Read out the IDs of rules that changed, their new states, and the next idle deadline. A single host timer can serve all rules on that stream.
 
-[Try the interactive timeline](https://pgg-kthwake.tancurl3.chatgpt.site) · [Single C++17 header](include/kthwake.hpp) · [Python binding](#use-from-python) · [Benchmark results](EVIDENCE.md)
+[Browser timeline](https://pgg-kthwake.tancurl3.chatgpt.site) · [Offline timeline](demo/index.html) · [Single C++17 header](include/kthwake.hpp) · [Python binding](#use-from-python) · [Benchmark results](EVIDENCE.md)
 
 | Example time | Input to the index | Output for the three-in-20-ms rule |
 | --- | --- | --- |
@@ -77,7 +77,7 @@ assert ix.next_expiry() == 110
 
 The asyncio example arms one timer per stream, reuses it while its deadline holds, and handles event-loop delays by emitting intervening transitions at their logical times. The Python binding materializes tuples for the changed subscribers. The native benchmark measures C++ callbacks.
 
-The [prebuilt Linux x86-64 CLI](https://pgg-kthwake.tancurl3.chatgpt.site/kthwake-linux-x86_64) has [published SHA-256 checksums](https://pgg-kthwake.tancurl3.chatgpt.site/SHA256SUMS). It requires glibc ≥2.34 and libstdc++ with GLIBCXX_3.4.32. The source build uses the host toolchain.
+All five release files and their checksums are available from [the versioned download directory](https://github.com/pgg898200-ship-it/chronosieve/tree/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0). The [prebuilt Linux x86-64 CLI](https://raw.githubusercontent.com/pgg898200-ship-it/chronosieve/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0/kthwake-linux-x86_64) has [published SHA-256 checksums](https://raw.githubusercontent.com/pgg898200-ship-it/chronosieve/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0/SHA256SUMS). It requires glibc ≥2.34 and libstdc++ with GLIBCXX_3.4.32. The source build uses the host toolchain.
 
 ## Time and delivery contract
 
