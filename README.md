@@ -182,6 +182,21 @@ python3 examples/regime_volatility_monitor.py  # Cauchy E-detectors + E-Reset PI
 python3 examples/mcp_agent_demo.py             # Live stdio JSON-RPC 2.0 MCP server workflow
 ```
 
+### Optional repeated-alarm escalation
+
+The [incident example](examples/alarm_escalation.py) feeds the actual `EDetector.step` alarm flag into KthWake. It emits a watch on the first alarm in 3 ms and escalates after three alarms in 9 ms. Auto-reset starts a new detector run after each alarm. Each policy emits one update when its state changes, including idle expiry. The default replay injects a shift into synthetic residuals; adjust the detector and policies for your stream.
+
+From a ChronoSieve checkout with CPython, setuptools, wheel and C/C++17 compilers:
+
+```bash
+KTHWAKE_SOURCE='git+https://github.com/pgg898200-ship-it/chronosieve.git@7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f#subdirectory=companions/kthwake'
+python3 -m pip install --no-build-isolation . "${KTHWAKE_SOURCE}"
+python3 examples/alarm_escalation.py
+python3 examples/verify_alarm_escalation.py
+```
+
+Set `KTHWAKE_SOURCE` to a local source checkout for development. Pass `--stdin` to replay JSONL rows with `t_ms` and `residual`. Supply observations in nondecreasing timestamp order. The example groups alarms at equal timestamps and emits silent-period updates at their logical deadlines when more data arrives or input closes. A live event loop can arm its timer at `Index.next_expiry()`.
+
 ### 1. Python Zero-Copy Batch & Multi-Agent Pipeline (Zero Dependencies)
 
 ```python
@@ -253,6 +268,10 @@ Tools exposed: `chronosieve_create_channel`, `chronosieve_ingest`, `chronosieve_
 ```
 
 ---
+
+## Route a wakeup to a worker
+
+ChronoSieve can signal when a stream changes. [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift) can combine that alarm with capacity, queue depth, or another integer condition and emit one enter/exit event per affected worker. The [runnable integration example](https://github.com/pgg898200-ship-it/chronosieve/blob/releases/guardshift/guardshift/examples/chronosieve_routing.py) feeds a batch through `EDetector` and dispatches the first alarm when capacity is available. [Try atomic updates in the browser](https://huggingface.co/spaces/pgg-engineering/guardshift).
 
 ## For AI & Coding Agents
 

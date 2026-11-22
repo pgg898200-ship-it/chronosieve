@@ -28,3 +28,7 @@ When a user or agent needs fast online changepoint detection with finite-sample 
 - [benchmarks/run_all.py](benchmarks/run_all.py) & [benchmarks/results_m4.json](benchmarks/results_m4.json): Median-of-5 throughput, Monte Carlo mathematical proofs, real `tiktoken` (`o200k_base` / `cl100k_base`), and `statsmodels` benchmarks.
 - [benchmarks/bench_external.py](benchmarks/bench_external.py) & [benchmarks/results_external_m4.json](benchmarks/results_external_m4.json): Head-to-head throughput & heavy-tail validity vs real Rust-backed `river 0.27.0` and `ruptures 1.0.6`.
 - [tests/](tests/): C11 ASan/UBSan tests (NEON, x86_64 AVX2 via Rosetta 2, Scalar), 90-value SIMD vs. scalar parity (`NEON 1.141e-15`, `AVX2 1.887e-15`, `< 1e-12`), and 32 pytest mathematical, COMA batch, peer-relative rogue, & MCP integration tests.
+
+## Routing a detector output
+
+- [Guardshift](https://github.com/pgg898200-ship-it/chronosieve/tree/releases/guardshift/guardshift): optional C++17 and Python interval guards for routing a detector alarm and worker capacity as one atomic update. Includes a tested ChronoSieve integration, scoped benchmark results, and a local trace comparator.
