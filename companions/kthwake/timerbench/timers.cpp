@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <fstream>
@@ -12,6 +13,7 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -160,14 +162,39 @@ public:
     }
 };
 
+U unsigned_decimal(const std::string& token) {
+    U value;
+    const char* end = token.data() + token.size();
+    auto result = std::from_chars(token.data(), end, value);
+    if (result.ec != std::errc{} || result.ptr != end)
+        throw std::invalid_argument("expected an unsigned decimal integer");
+    return value;
+}
+
 template<class Add>
 void read_pairs(const char* path, Add add) {
     std::ifstream f(path);
     if (!f) throw std::runtime_error(std::string("cannot open ") + path);
     bool any = false;
-    U a, b;
-    while (f >> a >> b) { add(a, b); any = true; }
-    if (!f.eof() || !any) throw std::runtime_error("expected nonempty unsigned pairs");
+    std::size_t line_number = 0;
+    std::string line;
+    while (std::getline(f, line)) {
+        ++line_number;
+        std::istringstream row(line);
+        std::string first, second, extra;
+        if (!(row >> first)) continue;
+        try {
+            if (!(row >> second) || row >> extra)
+                throw std::invalid_argument("expected two columns");
+            add(unsigned_decimal(first), unsigned_decimal(second));
+            any = true;
+        } catch (const std::exception& error) {
+            throw std::runtime_error(std::string(path) + ":" + std::to_string(line_number)
+                                     + ": " + error.what());
+        }
+    }
+    if (f.bad()) throw std::runtime_error(std::string("read failed: ") + path);
+    if (!any) throw std::runtime_error(std::string("empty fixture: ") + path);
 }
 
 template<class Engine, class Emit>
@@ -234,7 +261,7 @@ int main(int argc, char** argv) try {
             throw std::runtime_error("expected strictly ascending tick times");
         ticks.emplace_back(t, n);
     });
-    unsigned reps = argc == 4 ? static_cast<unsigned>(std::stoul(argv[3])) : 9;
+    U reps = argc == 4 ? unsigned_decimal(argv[3]) : 9;
     if (reps == 0 || reps > 1000) throw std::runtime_error("reps must be 1..1000");
     using Index = kthwake::Index;
     using PerPair = HeapScheduler<false>;
