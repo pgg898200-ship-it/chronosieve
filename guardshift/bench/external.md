@@ -21,6 +21,22 @@ python3 bench/external_summary.py /tmp/external.jsonl
 
 The measured host reported AMD EPYC 9V74 and GCC 14.2.0. The harness rotates implementation order across three repetitions for each of three seeds. Timings cover the call to apply a patch and materialize its sorted transition list. Index construction, oracle checks, output destruction, ingestion, network delivery and agent execution are outside the timed region. Each record includes build time, mean patch time, p50, p99 and an ordered-transition checksum. The rolling Azure signals are trace-derived, while the guard definitions are generated. The other workloads and guards are synthetic. The host was shared, and the microbenchmarks cover warmed in-process engines with fixed guard sets.
 
+## Reproduce a win and a loss
+
+After compiling the executable above, use `--crossover` to run just the 8,192-guard atomic and 32,768-guard jump workloads. This skips the million-guard builds and does not require the Azure fixture. It keeps the same three seeds, three repetitions, four external adapters and full-recomputation checks.
+
+```sh
+MALLOC_TRIM_THRESHOLD_=0 taskset -c 8 /tmp/guardshift-external --crossover > /tmp/crossover.jsonl
+python3 bench/external_summary.py /tmp/crossover.jsonl
+```
+
+On November 23, 2026, an AMD EPYC 9V74 core with GCC 14.2.0 produced the following medians of nine run means. The fastest external adapter on both workloads used the Eytzinger endpoint layout. [All 90 measurements](../results/crossover.jsonl)
+
+| Workload | Guards | Guardshift µs/patch | SuperIntervals µs/patch |
+| --- | ---: | ---: | ---: |
+| Atomic four-field patch | 8,192 | 0.136 | 0.295 |
+| Jump | 32,768 | 23.107 | 15.916 |
+
 ## Measurements
 
 Each entry is the median of nine run means. The fastest external column selects the lowest median among all four SuperIntervals configurations for that workload. Ratios above one favor Guardshift.

@@ -1,5 +1,7 @@
 # ChronoSieve
 
+This release branch also contains [Guardshift](guardshift/README.md), a standalone C++17 and Python index for detecting which range guards change after an atomic batch of signal updates. Install it from this checkout with `python -m pip install ./guardshift`.
+
 **101 KB zero-dependency C11/SIMD engine for mathematically certified streaming change detection, conformal uncertainty, multi-agent fusion, and LLM wake-up digests.**
 
 [![CI](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml/badge.svg)](https://github.com/pgg898200-ship-it/chronosieve/actions/workflows/ci.yml)

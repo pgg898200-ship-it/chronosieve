@@ -17,9 +17,14 @@ python -m pip install https://huggingface.co/spaces/pgg-engineering/guardshift/r
 **From source**, use a C++17 compiler and CPython development headers. From outside the checkout, use `python -m pip install https://huggingface.co/spaces/pgg-engineering/guardshift/resolve/main/packages/guardshift-0.1.0.zip`. The Python wrapper uses the same native implementation as the C++ API and has zero runtime package dependencies.
 
 ```sh
+# From the root of the GitHub release branch, enter the Guardshift project.
+# If you extracted the standalone zip, start in its guardshift-0.1.0 directory.
+if [ -d guardshift/include ]; then cd guardshift; fi
 python -m pip install .
 python -m guardshift < examples/fleet.jsonl
 ```
+
+If your CPython build selects an unavailable compiler and GCC is installed, run `CC=gcc CXX=g++ python -m pip install .` from the Guardshift directory.
 
 The four output lines are `[]`, `[[0,true]]`, `[]`, and `[[0,false]]`. The first input line defines the initial signals and guards. Each later line is one ordered JSON array of signal ID and value pairs. The process flushes one output line per patch. Invalid input names the line on stderr and exits with status 2.
 

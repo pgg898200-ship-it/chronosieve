@@ -166,9 +166,14 @@ void compare(const Workload& w, unsigned seed, unsigned repeats) {
 
 int main(int argc, char** argv) {
     try {
-        if (argc != 2) throw std::invalid_argument("usage: external replay/azure-code.csv");
+        const bool crossover = argc == 2 && std::string(argv[1]) == "--crossover";
+        if (argc != 2) throw std::invalid_argument("usage: external replay/azure-code.csv | --crossover");
         for (unsigned seed : {17u, 42u, 217u}) {
             compare(make_work("atomic", 8192, 1200, seed), seed, 3);
+            if (crossover) {
+                compare(make_work("jump", 32768, 512, seed), seed, 3);
+                continue;
+            }
             compare(make_work("atomic", 32768, 1200, seed), seed, 3);
             compare(make_azure(argv[1], 8192, 1200, seed), seed, 3);
             compare(make_mixed(seed), seed, 3);
