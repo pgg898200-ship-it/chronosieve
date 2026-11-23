@@ -87,4 +87,4 @@ for shape in shared varied burst; do
 done
 ```
 
-The timer benchmark source SHA-256 is `7950ead85613d44471e857ff4fa58244c9ca7aa52e0a87b9644da447769503f1`. The release header SHA-256 is `cbe5699dc92016fe49bd0d003836ef6d7916d11bd07cbc746874d6ad5109287b`.
+The [timer benchmark source used for the archived measurements](https://github.com/pgg898200-ship-it/chronosieve/blob/7cca93890a5bfa1e120f6aaabda8d1b8d7957b1f/companions/kthwake/timerbench/timers.cpp) had SHA-256 `7950ead85613d44471e857ff4fa58244c9ca7aa52e0a87b9644da447769503f1`. The release header SHA-256 is `cbe5699dc92016fe49bd0d003836ef6d7916d11bd07cbc746874d6ad5109287b`.

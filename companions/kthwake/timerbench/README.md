@@ -38,3 +38,7 @@ done
 ```
 
 The checks and timed runs use the actual request-arrival timestamps with synthetic guard policies described in the [trace documentation](../replay/README.md). A full timer replay generates more transitions than a consumer observing only arrival snapshots. The harness accepts other strictly increasing timestamp/multiplicity fixtures in the same two-column format.
+
+For custom fixtures, put one whitespace-separated pair of unsigned decimal integers on each nonblank line. Guard rows contain a positive rank and window. Tick rows contain a strictly increasing timestamp and a nonnegative arrival count. The harness checks both files before reporting timings. A malformed row reports its file and line.
+
+On November 23, 2026, the release team verified the fixture reader against the six published Mooncake and Azure profiles. For each of the four implementations, the edge count, idle wake-up count and timestamped digest matched the archived CSV for every profile. The six timelines contained 5,700,090 transitions in total. This check concerns correctness. The release timing results above and in the Azure replay retain their original workload and compiler settings.
