@@ -2,6 +2,10 @@
 #define GUARDSHIFT_BENCH_LIBRARY
 #include "bench.cpp"
 
+#ifdef GUARDSHIFT_WITH_SUPERINTERVALS
+#include "superintervals_adapters.hpp"
+#endif
+
 #include <charconv>
 #include <unordered_set>
 
@@ -179,6 +183,14 @@ void compare_methods(const Workload& w) {
         methods.push_back({"direct_1d", measure_local<Endpoint1D>});
         methods.push_back({"bounded_width_1d", measure_local<Width1D>});
     }
+#ifdef GUARDSHIFT_WITH_SUPERINTERVALS
+    using Map = si::IntervalMap<Value, Id>;
+    using Eytz = si::IntervalMapEytz<Value, Id>;
+    methods.push_back({"superintervals", measure_local<SuperIntervalsAdapter<Map>>});
+    methods.push_back({"superintervals_eytz", measure_local<SuperIntervalsAdapter<Eytz>>});
+    methods.push_back({"superintervals_edges", measure_local<SuperIntervalsEdges<Map>>});
+    methods.push_back({"superintervals_edges_eytz", measure_local<SuperIntervalsEdges<Eytz>>});
+#endif
     for (unsigned round = 0; round < 3; ++round) {
         for (const auto& entry : methods) entry.second(w, oracle, truth, entry.first, round);
         std::rotate(methods.begin(), methods.begin() + 1, methods.end());

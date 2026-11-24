@@ -6,6 +6,8 @@ The point-query adapter builds a static interval index per field and caches its 
 
 The endpoint-query adapter stores guard IDs and transition directions at singleton interval endpoints. It sorts these points before calling the library’s build operation and releases each field’s temporary input to bound build memory. It issues one range query per changed field and updates counters for each crossed threshold. This favors sparse movements across a dense population of active ranges. Both adapters use the library's native C++ API with the default and Eytzinger layouts. The benchmark sorts and emits final changed guard IDs in all cases.
 
+For a local workload, [run these four adapters on your own trace](REPLAY.md#compare-your-trace-with-superintervals).
+
 ## Reproduce
 
 Run from the project root with GCC, Git and Linux taskset. Set the CPU to one in your process affinity mask. Current raw results are in [external.jsonl](../results/external.jsonl).
