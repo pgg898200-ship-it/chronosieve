@@ -19,6 +19,8 @@ KthWake and the three alternative implementations received identical timestamped
 
 Values above 1 favor KthWake. The smaller Mooncake individual-rates advantage has overlapping timing distributions. The burst workload favors a dedicated rank heap on both providers. Full measurements and build commands are in [timerbench](timerbench/README.md) and [the Azure replay](replay/README.md).
 
+On November 24, 2026, the release team measured index construction separately on a held-out prefix of the Azure conversational trace. With construction included, KthWake had the lowest median time for individual rates. The single-sift rank heap led on shared rates and burst windows. [Workload, timing boundaries and per-run results](timerbench/README.md#short-lived-scheduler-holdout-november-24-2026)
+
 ## Arrival-time snapshots only
 
 These are cheaper semantics: report the net change between observations. The independent Python counting oracle verified the timestamp, subscriber ID and direction of all 1,712,462 observed transitions across these six replays. The comparator set includes rank-grouped and window-grouped native indices with cached deadlines and specialized variants that skip deadline maintenance. Ten rotated repetitions for each of five methods. Construction is timed separately. Both the per-step latency and the total timings include instrumentation.

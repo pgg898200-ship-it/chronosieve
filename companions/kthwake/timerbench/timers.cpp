@@ -231,13 +231,14 @@ U mix(U v) {
     return v ^ (v >> 31);
 }
 
-struct Record { U ns, idle, edges, digest; };
+struct Record { U ns, idle, edges, digest, build_ns; };
 
 template<class Engine>
 Record measure(const std::vector<Guard>& rules, const std::vector<Tick>& ticks) {
-    Engine engine(rules);
     using Clock = std::chrono::steady_clock;
     U edges = 0, digest = 0;
+    auto build_start = Clock::now();
+    Engine engine(rules);
     auto start = Clock::now();
     U idle = drive(engine, ticks, [&](U t, Id id, bool state) {
         digest += mix(t * 0x9e3779b97f4a7c15ULL + 2 * U(id) + state);
@@ -245,11 +246,15 @@ Record measure(const std::vector<Guard>& rules, const std::vector<Tick>& ticks) 
     });
     auto end = Clock::now();
     return {static_cast<U>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()),
-            idle, edges, digest};
+            idle, edges, digest,
+            static_cast<U>(std::chrono::duration_cast<std::chrono::nanoseconds>(start - build_start).count())};
 }
 
 int main(int argc, char** argv) try {
-    if (argc < 3 || argc > 4) throw std::runtime_error("usage: timers GUARDS TICKS [REPS]");
+    const bool with_build = argc > 1 && std::string(argv[argc - 1]) == "--with-build";
+    const int positional = argc - static_cast<int>(with_build);
+    if (positional < 3 || positional > 4)
+        throw std::runtime_error("usage: timers GUARDS TICKS [REPS] [--with-build]");
     std::vector<Guard> rules;
     read_pairs(argv[1], [&](U k, U w) {
         if (!k || k > UINT32_MAX || !w) throw std::runtime_error("invalid guard");
@@ -261,7 +266,7 @@ int main(int argc, char** argv) try {
             throw std::runtime_error("expected strictly ascending tick times");
         ticks.emplace_back(t, n);
     });
-    U reps = argc == 4 ? unsigned_decimal(argv[3]) : 9;
+    U reps = positional == 4 ? unsigned_decimal(argv[3]) : 9;
     if (reps == 0 || reps > 1000) throw std::runtime_error("reps must be 1..1000");
     using Index = kthwake::Index;
     using PerPair = HeapScheduler<false>;
@@ -274,13 +279,17 @@ int main(int argc, char** argv) try {
     using Runner = Record (*)(const std::vector<Guard>&, const std::vector<Tick>&);
     std::array<Runner, 4> methods{measure<Index>, measure<PerPair>, measure<PerRank>, measure<SingleSift>};
     const std::array<std::string, 4> names{"kthwake", "pair-heap", "rank-heap", "rank-heap-sift"};
-    std::cout << "rep,method,elapsed_ns,idle_wakeups,edges,timestamped_digest\n";
+    std::cout << "rep,method,elapsed_ns,idle_wakeups,edges,timestamped_digest";
+    if (with_build) std::cout << ",build_ns";
+    std::cout << '\n';
     for (unsigned rep = 0; rep < reps; ++rep) {
         for (unsigned offset = 0; offset < methods.size(); ++offset) {
             auto i = (rep + offset) % methods.size();
             auto r = methods[i](rules, ticks);
             std::cout << rep << ',' << names[i] << ',' << r.ns << ',' << r.idle << ','
-                      << r.edges << ',' << r.digest << '\n';
+                      << r.edges << ',' << r.digest;
+            if (with_build) std::cout << ',' << r.build_ns;
+            std::cout << '\n';
         }
     }
     return 0;

@@ -27,6 +27,20 @@ def digest(content):
     return hashlib.sha256(content).hexdigest()
 
 
+def azure_arrival_ms(content):
+    # Preserve all seven fractional digits until flooring elapsed time to ms.
+    stamps = []
+    epoch = datetime(1970, 1, 1)
+    for row in csv.DictReader(content.decode("ascii").splitlines()):
+        seconds, fraction = row["TIMESTAMP"].split(".")
+        whole = datetime.fromisoformat(seconds) - epoch
+        ticks = (whole.days * 86400 + whole.seconds) * 10_000_000
+        stamps.append(ticks + int(fraction.ljust(7, "0")))
+    stamps.sort()
+    start = stamps[0]
+    return [(t - start) // 10_000 for t in stamps]
+
+
 def read_trace(content, trace):
     if digest(content) != TRACES[trace][1]:
         raise ValueError("Source SHA-256 mismatch; use the pinned revision")
@@ -35,17 +49,7 @@ def read_trace(content, trace):
         if stamps != sorted(stamps) or any(type(t) is not int or t < 0 for t in stamps):
             raise ValueError("Expected ordered, nonnegative integer timestamps")
     else:
-        # Preserve all seven fractional digits until flooring elapsed time to ms.
-        stamps = []
-        epoch = datetime(1970, 1, 1)
-        for row in csv.DictReader(content.decode("ascii").splitlines()):
-            seconds, fraction = row["TIMESTAMP"].split(".")
-            whole = datetime.fromisoformat(seconds) - epoch
-            ticks = (whole.days * 86400 + whole.seconds) * 10_000_000
-            stamps.append(ticks + int(fraction.ljust(7, "0")))
-        stamps.sort()
-        start = stamps[0]
-        stamps = [(t - start) // 10_000 for t in stamps]
+        stamps = azure_arrival_ms(content)
     return [(t, sum(1 for _ in group)) for t, group in itertools.groupby(stamps)]
 
 
