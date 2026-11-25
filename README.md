@@ -231,7 +231,7 @@ python3 examples/alarm_escalation.py
 python3 examples/verify_alarm_escalation.py
 ```
 
-Set `KTHWAKE_SOURCE` to a local source checkout for development. Pass `--stdin` to replay JSONL rows with `t_ms` and `residual`. Supply observations in nondecreasing timestamp order. The example groups alarms at equal timestamps and emits silent-period updates at their logical deadlines when more data arrives or input closes. A live event loop can arm its timer at `Index.next_expiry()`.
+Set `KTHWAKE_SOURCE` to a local source checkout for development. Pass `--stdin` to replay JSONL rows with `t_ms` and `residual`. Supply `t_ms` as a JSON integer from 0 through 18446744073709551615, in nondecreasing order. Each observation is checked before equal timestamps are grouped. The example groups alarms at equal timestamps and emits silent-period updates at their logical deadlines when more data arrives or input closes. A live event loop can arm its timer at `Index.next_expiry()`.
 
 ### 1. Python Zero-Copy Batch & Multi-Agent Pipeline (Zero Dependencies)
 

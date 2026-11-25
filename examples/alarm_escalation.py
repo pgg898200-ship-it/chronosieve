@@ -26,11 +26,16 @@ def incident_updates(observations: Iterable[tuple[int, float]]) -> Iterator[dict
         for guard_id, active in index.step(time_ms, alarms):
             yield {"t_ms": time_ms, "policy": POLICIES[guard_id][0], "active": active}
 
-    previous = -1
-    for time_ms, readings in groupby(observations, key=itemgetter(0)):
-        if type(time_ms) is not int or not 0 <= time_ms < 2**64 or time_ms < previous:
-            raise ValueError("timestamps must be nondecreasing unsigned 64-bit milliseconds")
-        previous = time_ms
+    def checked_observations() -> Iterator[tuple[int, float]]:
+        previous = 0
+        for row_number, (time_ms, residual) in enumerate(observations, start=1):
+            if type(time_ms) is not int or not previous <= time_ms < 2**64:
+                raise ValueError(f"observation {row_number}: timestamps must be nondecreasing "
+                                 "unsigned 64-bit milliseconds")
+            previous = time_ms
+            yield time_ms, residual
+
+    for time_ms, readings in groupby(checked_observations(), key=itemgetter(0)):
         # Idle deadlines tied with new input belong to the same snapshot.
         while (deadline := index.next_expiry()) is not None and deadline < time_ms:
             yield from apply(deadline, 0)
@@ -51,8 +56,11 @@ def main() -> None:
         series = ((row["t_ms"], row["residual"]) for row in rows)
     else:
         series = enumerate([0.0] * 5 + [3.0] * 11)
-    for update in incident_updates(series):
-        print(json.dumps(update))
+    try:
+        for update in incident_updates(series):
+            print(json.dumps(update))
+    except ValueError as error:
+        parser.error(str(error))
 
 
 if __name__ == "__main__":
