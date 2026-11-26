@@ -15,6 +15,7 @@ test: build/test build/kthwake build/timers
 	./build/test
 	python3 tests/cli.py ./build/kthwake
 	python3 tests/timerbench.py ./build/timers
+	python3 tests/replay_inputs.py
 example: build/kthwake
 	./build/kthwake --idle examples/guards.csv examples/ticks.csv
 clean:

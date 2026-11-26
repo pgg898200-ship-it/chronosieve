@@ -28,6 +28,8 @@ Each profile registers 4,096 subscribers before replay. A guard is active when a
 
 Shared policies cross eight round windows from 1 to 60 seconds with target rates of 2, 4, 5, 6, 7, 8, 10 and 12 requests/s and round thresholds up. Individual rate policies use the same rate choices and different millisecond windows. Individual burst windows use fixed cardinalities 4, 8, …, 512 and the same individual windows. The assignments are deterministic and independent of measured kernel performance. These are designed workloads. The operator who collected the trace supplied no alert definitions.
 
+Before timing, `measure.py` copies the tick stream and every guard file into a temporary directory and checks each copy against its SHA-256 in `oracle.json`. All runs use those copies. If a file differs, the command names it and exits. Regenerate the input directory with `prepare.py` to reproduce the original trace.
+
 The timing harness rotates method order across repetitions. Each native tick executes a callback that updates a digest. Construction time is recorded separately, and elapsed replay time includes the per-tick timer reads. Pass `--cpu N` to `measure.py` to pin a Linux run to one allowed logical CPU. The output stores every repetition alongside the CPU, compiler flags and source hashes.
 
 The Python oracle counts arrivals independently using prefix sums and binary search on observation times. It hashes UTF-8 rows `<time> <id> <0 or 1>\n`, ordered by time then subscriber ID. The verified digest covers every transition, including its direction. Expected hashes and source metadata are in [oracle.json](oracle.json). The native benchmark separately compares all four optimized C++ baselines' full per-tick edge lists before timing them.
