@@ -19,6 +19,16 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def copy_verified(source, destination, expected_hash):
+    digest = hashlib.sha256()
+    with source.open("rb") as src, destination.open("wb") as dst:
+        while chunk := src.read(1024 * 1024):
+            digest.update(chunk)
+            dst.write(chunk)
+    if digest.hexdigest() != expected_hash:
+        raise SystemExit(f"{source}: SHA-256 mismatch against oracle.json")
+
+
 def cpu_model():
     info = Path("/proc/cpuinfo")
     if info.exists():
@@ -44,7 +54,8 @@ def main():
             p.error("CPU pinning requires sched_setaffinity support")
         os.sched_setaffinity(0, {args.cpu})
     inputs = args.inputs
-    expected = json.loads((inputs / "oracle.json").read_text())
+    manifest = (inputs / "oracle.json").read_bytes()
+    expected = json.loads(manifest)
     header = ROOT / "include/kthwake.hpp"
     source = ROOT / "bench/bench.cpp"
     flags = ["-std=c++17", "-O3", "-DNDEBUG"]
@@ -54,14 +65,20 @@ def main():
               "cpu": cpu_model(), "affinity": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
               "compiler": subprocess.check_output([args.cxx, "--version"], text=True).splitlines()[0],
               "compiler_flags": flags, "source_sha256": sha(source), "header_sha256": sha(header),
-              "input_manifest_sha256": sha(inputs / "oracle.json"), "repetitions": args.reps,
+              "input_manifest_sha256": hashlib.sha256(manifest).hexdigest(), "repetitions": args.reps,
               "summary": {}, "runs": []}
     with tempfile.TemporaryDirectory() as tmp:
+        ticks = Path(tmp) / "ticks.txt"
+        copy_verified(inputs / "ticks.txt", ticks, expected["ticks_sha256"])
+        guards = {}
+        for i, (shape, oracle) in enumerate(expected["scenarios"].items()):
+            guards[shape] = Path(tmp) / f"{i}.guards"
+            copy_verified(inputs / f"{shape}.guards", guards[shape], oracle["guards_sha256"])
         bench = Path(tmp) / "bench"
         subprocess.run([args.cxx, *flags, str(source), "-o", str(bench)], check=True)
         for shape, oracle in expected["scenarios"].items():
-            command = [str(bench), "--guards", str(inputs / f"{shape}.guards"), "--ticks",
-                       str(inputs / "ticks.txt"), "--name", f"{expected['trace']}-{shape}",
+            command = [str(bench), "--guards", str(guards[shape]), "--ticks",
+                       str(ticks), "--name", f"{expected['trace']}-{shape}",
                        "--reps", str(args.reps), "--lazy", "1"]
             lines = subprocess.check_output(command, text=True)
             groups = collections.defaultdict(list)
