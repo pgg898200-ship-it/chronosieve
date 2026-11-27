@@ -64,12 +64,21 @@ if (next) ix.step(*next, 0, changed); // the five-ms rule turns off
 
 ## Use from Python
 
-Install the source directory using CPython, setuptools, wheel, and a C++17 compiler. The package name below is a local build.
+**CPython 3.12 on glibc Linux x86-64.** In a virtual environment, install the published wheel directly. Pip checks the release SHA-256. This command needs neither a compiler nor a repository checkout.
 
 ```sh
-python3 -m pip install --no-build-isolation .
-python3 examples/asyncio_scheduler.py
+python -m pip install --no-index --no-deps 'https://raw.githubusercontent.com/pgg898200-ship-it/chronosieve/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0/kthwake-0.1.0-cp312-cp312-linux_x86_64.whl#sha256=2b30f8fad84d3a279d06991b377c5e44c04762201b3710f27720f29e290453f2'
 ```
+
+The wheel uses the CPython 3.12 ABI. Its extension references glibc symbols through `GLIBC_2.14` and libstdc++ symbols through `GLIBCXX_3.4.29` and `CXXABI_1.3.13`. The release team verified the install on Debian 13 with glibc 2.41.
+
+**Build from the release archive.** For CPython 3.13 or a different build target, use a C++17 compiler and the development headers matching your Python interpreter. A build error mentioning a missing `Python.h` means those headers must be installed or added to the compiler's include path. Install setuptools and wheel in the virtual environment before running:
+
+```sh
+python -m pip install --no-index --no-deps --no-build-isolation 'https://raw.githubusercontent.com/pgg898200-ship-it/chronosieve/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0/kthwake-0.1.0.tar.gz#sha256=61cbe6b242fd53b9aaf439dae7a8c80792a56513e6311c6efd6cb9e17be1e2cd'
+```
+
+To build from an existing source checkout, run `python -m pip install --no-build-isolation .` in `companions/kthwake`. Check the installed binding from any directory:
 
 ```python
 from kthwake import Index
@@ -77,9 +86,13 @@ ix = Index([(3, 20), (1, 5)])
 assert ix.step(100, 2) == [(1, True)]
 assert ix.step(105, 1) == [(0, True)]
 assert ix.next_expiry() == 110
+assert ix.step(110) == [(1, False)]
+assert ix.next_expiry() == 120
+assert ix.step(120) == [(0, False)]
+assert ix.next_expiry() is None
 ```
 
-The asyncio example arms one timer per stream, reuses it while its deadline holds, and handles event-loop delays by emitting intervening transitions at their logical times. The Python binding materializes tuples for the changed subscribers. The native benchmark measures C++ callbacks.
+From a checkout, run `python examples/asyncio_scheduler.py` for the live example. It arms one timer per stream, reuses it while its deadline holds, and handles event-loop delays by emitting intervening transitions at their logical times. The Python binding materializes tuples for the changed subscribers. The native benchmark measures C++ callbacks.
 
 All five release files and their checksums are available from [the versioned download directory](https://github.com/pgg898200-ship-it/chronosieve/tree/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0). The [prebuilt Linux x86-64 CLI](https://raw.githubusercontent.com/pgg898200-ship-it/chronosieve/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0/kthwake-linux-x86_64) has [published SHA-256 checksums](https://raw.githubusercontent.com/pgg898200-ship-it/chronosieve/f6df7cdb54362fea22003a814ac83fcc7b179a8f/companions/kthwake/downloads/v0.1.0/SHA256SUMS). It requires glibc ≥2.34 and libstdc++ with GLIBCXX_3.4.32. The source build uses the host toolchain.
 
