@@ -39,7 +39,7 @@ The example applies two arrivals at 100 ms and one at 105 ms. The three-in-20-ms
 # {"t":120,"id":0,"active":false}
 ```
 
-Omit `--idle` to compare snapshots only at supplied ticks. Pass `-` for the tick file to stream from standard input. The CLI writes JSONL, accepts integer CSV or whitespace-delimited inputs and reports malformed rows on stderr.
+Omit `--idle` to compare snapshots only at supplied ticks. In a build from this branch, pass `-` for the tick file to stream from standard input. Send a newline after each tick. The CLI flushes its changes before waiting for the next row, so a producer can read a response while keeping stdin open. A tick with no changes emits no row. In `--idle` mode, a later tick or end of input advances logical time during silence. The CLI writes JSONL, accepts integer CSV or whitespace-delimited inputs and reports malformed rows on stderr.
 
 The Python [rolling budget example](examples/rolling_budget.py) shows how an ordered stream of weighted token charges crosses a rolling threshold and when it clears.
 

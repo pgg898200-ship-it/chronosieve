@@ -11,6 +11,7 @@ namespace {
 constexpr const char* usage = R"(Usage: kthwake [--idle] GUARDS TICKS
 GUARDS contains one positive k,window pair per line. IDs start at zero.
 TICKS contains ordered time,arrivals pairs. Use - to read ticks from stdin.
+In stdin mode, changes are flushed before the CLI waits for another row.
 Decimal integers may be separated by comma, space or tab. # starts a comment.
 Output is JSONL: one {"t":time,"id":id,"active":boolean} per changed rule.
 Each tick is an atomic snapshot. --idle also emits idle transitions between
@@ -112,7 +113,7 @@ int run(int argc, char** argv) {
 }
 int main(int argc, char** argv) {
     std::ios::sync_with_stdio(false);
-    std::cin.tie(nullptr);
+    // Keep stdin tied to stdout so a producer can wait for the current batch.
     try { return run(argc, argv); }
     catch (const std::exception& e) { std::cerr << "kthwake: " << e.what() << '\n'; return 2; }
 }
